@@ -195,6 +195,14 @@ document.addEventListener('DOMContentLoaded', () => {
             userInfo.classList.remove('hidden');
             userAvatar.src = user.photoURL;
 
+            // --- BETA ACCESS BYPASS ---
+            // If logged in, automatically grant access
+            localStorage.setItem('betaAccessGranted', 'true');
+            const lockScreen = document.getElementById('lock-screen');
+            const mainAppContainer = document.getElementById('main-app-container');
+            if (lockScreen) lockScreen.style.display = 'none';
+            if (mainAppContainer) mainAppContainer.classList.remove('hidden');
+
             // --- LOAD THEME FROM FIREBASE ---
             try {
                 const docRef = doc(db, "users_preferences", user.uid);
