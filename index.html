@@ -182,8 +182,12 @@
         </main>
 
         <!-- Floating Mic Button -->
-        <div class="mic-container">
+        <div class="mic-container" style="position: relative;">
             <div class="mic-ripple" id="mic-ripple"></div>
+            <!-- Tooltip Beta -->
+            <div class="beta-tooltip" id="beta-tooltip">
+                <i class="fa-solid fa-circle-info"></i> Función experimental. Mejor experiencia en PC.
+            </div>
             <button id="mic-btn" class="mic-btn">
                 <i class="fa-solid fa-microphone"></i>
             </button>
@@ -216,6 +220,22 @@
                     placeholder="Escribe aquí tu opinión..."></textarea>
                 <button id="btn-send-feedback" class="btn btn-primary" style="width: 100%;"><i
                         class="fa-solid fa-paper-plane"></i> Enviar</button>
+            </div>
+        </div>
+
+        <!-- Beta Warning Modal -->
+        <div id="beta-modal" class="hidden"
+            style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; display: flex; align-items: center; justify-content: center;">
+            <div class="card" style="width: 90%; max-width: 400px; padding: 20px; position: relative;">
+                <h3 style="margin-bottom: 15px; color: var(--warning);"><i class="fa-solid fa-microphone-lines"></i>
+                    Dictado por voz (Fase Beta)</h3>
+                <p style="font-size: 0.95rem; color: var(--text-main); margin-bottom: 20px; line-height: 1.5;">
+                    Estamos entrenando a nuestro asistente virtual. Para garantizar la mejor precisión y evitar cortes
+                    en el audio, te recomendamos usar esta función desde el navegador de tu computadora (PC/Mac).
+                </p>
+                <button id="btn-close-beta-modal" class="btn btn-primary" style="width: 100%;">
+                    ¡Entendido!
+                </button>
             </div>
         </div>
 

@@ -338,7 +338,25 @@ document.addEventListener('DOMContentLoaded', () => {
         stopListeningIndicator();
     }
 
+    const betaModal = document.getElementById('beta-modal');
+    const btnCloseBetaModal = document.getElementById('btn-close-beta-modal');
+
+    // Hide tooltip on click, logic for first-time use
     micBtn.addEventListener('click', () => {
+        // Hide the tooltip on first interaction
+        const tooltip = document.getElementById('beta-tooltip');
+        if (tooltip) tooltip.style.display = 'none';
+
+        // Check if user has accepted the beta warning
+        const hasAcceptedBeta = localStorage.getItem('betaVoiceAccepted');
+
+        if (!hasAcceptedBeta) {
+            // First time use -> Show modal, don't start listening yet
+            if (betaModal) betaModal.classList.remove('hidden');
+            return;
+        }
+
+        // Normal listening logic
         if (isListening) {
             stopListening();
         } else {
@@ -351,6 +369,13 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     });
+
+    if (btnCloseBetaModal && betaModal) {
+        btnCloseBetaModal.addEventListener('click', () => {
+            localStorage.setItem('betaVoiceAccepted', 'true');
+            betaModal.classList.add('hidden');
+        });
+    }
 
     function showToast(message) {
         transcriptToast.textContent = message;

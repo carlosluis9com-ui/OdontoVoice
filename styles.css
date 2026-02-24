@@ -643,3 +643,29 @@ textarea:focus {
         width: auto;
     }
 }
+
+/* Beta Tooltip */
+.beta-tooltip {
+    position: absolute;
+    bottom: 75px;
+    /* Above the mic button */
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: var(--surface);
+    color: var(--text-muted);
+    border: 1px solid var(--warning);
+    border-radius: var(--radius-md);
+    padding: 0.4rem 0.6rem;
+    font-size: 0.7rem;
+    white-space: nowrap;
+    box-shadow: var(--shadow-sm);
+    z-index: 10;
+    display: none;
+    /* Can be toggled if needed, but we can also just show it */
+    animation: slideIn 0.3s ease;
+}
+
+/* Show it by default, or you can add JS logic to show/hide */
+.mic-container .beta-tooltip {
+    display: block;
+}
