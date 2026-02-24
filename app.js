@@ -555,15 +555,55 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             let mappedFaceClass = null;
+            let displayFace = face; // what we show in the UI
+
             if (face) {
                 if (face === 'vestibular') mappedFaceClass = 'face-top';
                 if (face === 'palatino') mappedFaceClass = 'face-bottom';
                 if (face === 'oclusal') mappedFaceClass = 'face-center';
-                if (face === 'mesial') mappedFaceClass = 'face-left';
-                if (face === 'distal') mappedFaceClass = 'face-right';
+                if (face === 'mesial') {
+                    const q = parseInt(unit.toString()[0]);
+                    mappedFaceClass = [1, 4, 5, 8].includes(q) ? 'face-right' : 'face-left';
+                }
+                if (face === 'distal') {
+                    const q = parseInt(unit.toString()[0]);
+                    mappedFaceClass = [1, 4, 5, 8].includes(q) ? 'face-left' : 'face-right';
+                }
+
+                // Compound faces: vestibular-mesial, palatino-distal, etc.
+                if (face.includes('-')) {
+                    const parts = face.split('-'); // e.g. ['vestibular', 'mesial']
+                    const primaryFace = parts[0];
+                    const subPos = parts[1];
+                    const q = parseInt(unit.toString()[0]);
+                    const rightSide = [1, 4, 5, 8].includes(q);
+                    const isUpper = [1, 2, 5, 6].includes(q);
+
+                    let primaryClass = 'face-top';
+                    if (primaryFace === 'palatino' || primaryFace === 'lingual') primaryClass = 'face-bottom';
+
+                    let subClass = (subPos === 'mesial')
+                        ? (rightSide ? 'right' : 'left')
+                        : (rightSide ? 'left' : 'right');
+
+                    mappedFaceClass = `${primaryClass}-${subClass}`;
+
+                    // Auto-correct palatino/lingual for display
+                    let correctPrimary = primaryFace;
+                    if (primaryFace === 'palatino' && !isUpper) correctPrimary = 'lingual';
+                    if (primaryFace === 'lingual' && isUpper) correctPrimary = 'palatino';
+                    displayFace = `${correctPrimary} por ${subPos}`;
+                }
+
+                // Auto-correct simple palatino/lingual
+                if (face === 'palatino' || face === 'lingual') {
+                    const q = parseInt(unit.toString()[0]);
+                    const isUpper = [1, 2, 5, 6].includes(q);
+                    displayFace = isUpper ? 'palatino' : 'lingual';
+                }
             }
 
-            addFinding(unit, condition, face, mappedFaceClass);
+            addFinding(unit, condition, displayFace, mappedFaceClass);
 
             // Clear manual form
             document.getElementById('manual-unit').value = '';
