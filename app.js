@@ -1066,13 +1066,30 @@ document.addEventListener('DOMContentLoaded', () => {
             y += 4;
 
             try {
+                // Ensure element is visible for html2canvas
+                const wasHidden = odontogramEl.offsetParent === null;
+                const origDisplay = odontogramEl.style.display;
+                const origVisibility = odontogramEl.style.visibility;
+                const origPosition = odontogramEl.style.position;
+                if (wasHidden) {
+                    odontogramEl.style.display = 'block';
+                    odontogramEl.style.visibility = 'visible';
+                    odontogramEl.style.position = 'absolute';
+                    odontogramEl.style.left = '-9999px';
+                }
+
                 // Force white background for capture
                 const origBg = odontogramEl.style.backgroundColor;
                 odontogramEl.style.backgroundColor = '#FFFFFF';
                 odontogramEl.querySelectorAll('.tooth-number').forEach(el => el.style.color = '#111827');
                 odontogramEl.querySelectorAll('.tooth-face').forEach(el => {
+                    if (!el.classList.contains('face-caries') &&
+                        !el.classList.contains('face-restoration') &&
+                        !el.classList.contains('face-sealant') &&
+                        !el.classList.contains('face-fracture')) {
+                        el.style.fill = '#FFFFFF';
+                    }
                     el.style.stroke = '#333';
-                    el.style.fill = '#FFFFFF';
                 });
 
                 const canvas = await html2canvas(odontogramEl, {
@@ -1083,6 +1100,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 odontogramEl.style.backgroundColor = origBg;
                 odontogramEl.querySelectorAll('.tooth-number').forEach(el => el.style.color = '');
                 odontogramEl.querySelectorAll('.tooth-face').forEach(el => { el.style.stroke = ''; el.style.fill = ''; });
+                if (wasHidden) {
+                    odontogramEl.style.display = origDisplay;
+                    odontogramEl.style.visibility = origVisibility;
+                    odontogramEl.style.position = origPosition;
+                    odontogramEl.style.left = '';
+                }
 
                 const imgData = canvas.toDataURL('image/png');
                 const imgW = contentW;
@@ -1156,7 +1179,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 phone: inputs.phone.value,
                 pathologies: inputs.pathologies.value
             };
-            const odontogramEl = document.getElementById('odontogram-container');
+            // Use the cloned odontogram in the report view (the original is hidden)
+            const odontogramEl = document.getElementById('cloned-odontogram') || document.getElementById('odontogram-container');
             const doc = await generateOdontogramPDF(pInfo, clinicalFindings, odontogramEl);
             doc.save(`Odontograma_${pInfo.name.replace(/\s+/g, '_') || 'Paciente'}.pdf`);
 
@@ -1439,7 +1463,7 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
     }
 
-    // PDF from history detail
+    // PDF from history detail — build a temporary odontogram from saved findings
     const btnDetailPdf = document.getElementById('btn-detail-pdf');
     btnDetailPdf.addEventListener('click', async () => {
         if (!currentDetailPatient) return;
@@ -1455,9 +1479,166 @@ document.addEventListener('DOMContentLoaded', () => {
                 phone: currentDetailPatient.phone,
                 pathologies: currentDetailPatient.pathologies
             };
-            // No live odontogram for history records — pass null
-            const doc = await generateOdontogramPDF(pInfo, currentDetailPatient.findings, null);
+
+            // Build a temporary offscreen odontogram to capture for the PDF
+            let tempOdontogram = null;
+            if (Array.isArray(currentDetailPatient.findings) && currentDetailPatient.findings.length > 0) {
+                tempOdontogram = document.createElement('div');
+                tempOdontogram.className = 'odontogram-container';
+                tempOdontogram.style.cssText = 'position:absolute; left:-9999px; top:0; background:#FFFFFF; padding:10px;';
+
+                // Build jaw rows
+                const rows = [
+                    { id: 'odontogram-adult-upper', teeth: jawData.adultUpper, cls: 'jaw-row' },
+                    { id: 'odontogram-child-upper', teeth: jawData.childUpper, cls: 'jaw-row child-jaw' },
+                    { id: 'midline', teeth: null, cls: 'midline-divider' },
+                    { id: 'odontogram-child-lower', teeth: jawData.childLower, cls: 'jaw-row child-jaw' },
+                    { id: 'odontogram-adult-lower', teeth: jawData.adultLower, cls: 'jaw-row' }
+                ];
+                rows.forEach(r => {
+                    const div = document.createElement('div');
+                    div.className = r.cls;
+                    if (r.teeth) {
+                        r.teeth.forEach(num => {
+                            div.innerHTML += createToothSVG(num);
+                        });
+                    }
+                    tempOdontogram.appendChild(div);
+                });
+
+                document.body.appendChild(tempOdontogram);
+
+                // Apply each finding to the temporary odontogram
+                currentDetailPatient.findings.forEach(f => {
+                    // updateSVGTooth works on the DOM by ID, so we need temp IDs
+                    // The createToothSVG already creates elements with id="tooth-{num}"
+                    // but they might conflict with existing ones. We'll use a scoped approach.
+                    const toothUnit = tempOdontogram.querySelector(`#tooth-${f.unit}`);
+                    if (!toothUnit) return;
+
+                    const condLower = (f.condition || '').toLowerCase();
+                    const faceClass = f.mappedFaceClass || null;
+
+                    // Endodoncia
+                    if (condLower.includes('endodoncia')) {
+                        const line = toothUnit.querySelector('.endo-line');
+                        if (line) line.classList.remove('hidden');
+                        return;
+                    }
+                    // Diastema
+                    if (condLower.includes('diastema')) {
+                        const d = toothUnit.querySelector('.diastema-right');
+                        if (d) d.classList.remove('hidden');
+                        return;
+                    }
+                    // Giroversion
+                    if (condLower.includes('giroversion') || condLower.includes('giroversión')) {
+                        if (condLower.includes('izquierda') || faceClass === 'giro-left') {
+                            const arrow = toothUnit.querySelector('.giro-left');
+                            if (arrow) arrow.classList.remove('hidden');
+                        } else {
+                            const arrow = toothUnit.querySelector('.giro-right');
+                            if (arrow) arrow.classList.remove('hidden');
+                        }
+                        return;
+                    }
+                    // Caries Incipiente
+                    if (condLower.includes('incipiente')) {
+                        if (faceClass) {
+                            const dot = toothUnit.querySelector(`.dot-${faceClass}`);
+                            if (dot) dot.classList.remove('hidden');
+                        } else {
+                            const dot = toothUnit.querySelector(`.dot-face-center`);
+                            if (dot) dot.classList.remove('hidden');
+                        }
+                        return;
+                    }
+                    // Abrasion / Erosion
+                    if (condLower.includes('abrasion') || condLower.includes('abrasión') || condLower.includes('erosion') || condLower.includes('erosión')) {
+                        if (faceClass === 'face-top') {
+                            const l = toothUnit.querySelector('.abrasion-top');
+                            if (l) l.classList.remove('hidden');
+                        } else {
+                            const l = toothUnit.querySelector('.abrasion-bottom') || toothUnit.querySelector('.abrasion-top');
+                            if (l) l.classList.remove('hidden');
+                        }
+                        return;
+                    }
+                    // Atriccion
+                    if (condLower.includes('atriccion') || condLower.includes('atricción')) {
+                        const l = toothUnit.querySelector('.atriccion-center');
+                        if (l) l.classList.remove('hidden');
+                        return;
+                    }
+                    // Erupcion
+                    if (condLower.includes('erupcion') || condLower.includes('erupción')) {
+                        const c = toothUnit.querySelector('.eruption-circle');
+                        if (c) c.classList.remove('hidden');
+                        return;
+                    }
+                    // Solid fills
+                    let applyClass = '';
+                    let isDefectuosa = false;
+                    if (condLower.includes('caries')) applyClass = 'face-caries';
+                    if (condLower.includes('restauracion') || condLower.includes('restauración')) {
+                        applyClass = 'face-restoration';
+                        if (condLower.includes('defectuosa') || condLower.includes('recidiva')) isDefectuosa = true;
+                    }
+                    if (condLower.includes('sellante')) applyClass = 'face-sealant';
+                    if (condLower.includes('fractura')) applyClass = 'face-fracture';
+                    if (condLower.includes('exodoncia') || condLower.includes('ausencia') || condLower.includes('ausente')) {
+                        const isBlueCross = condLower.includes('ausencia') || condLower.includes('ausente');
+                        const crossColor = isBlueCross ? 'var(--restoration)' : 'var(--caries)';
+                        const svgGroup = toothUnit.querySelector('.tooth-svg');
+                        if (svgGroup) {
+                            const l1 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                            l1.setAttribute('x1', '0'); l1.setAttribute('y1', '0');
+                            l1.setAttribute('x2', '100'); l1.setAttribute('y2', '100');
+                            l1.setAttribute('stroke', crossColor); l1.setAttribute('stroke-width', '4');
+                            const l2 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                            l2.setAttribute('x1', '0'); l2.setAttribute('y1', '100');
+                            l2.setAttribute('x2', '100'); l2.setAttribute('y2', '0');
+                            l2.setAttribute('stroke', crossColor); l2.setAttribute('stroke-width', '4');
+                            svgGroup.appendChild(l1); svgGroup.appendChild(l2);
+                        }
+                        return;
+                    }
+                    if (applyClass) {
+                        if (faceClass) {
+                            const polygon = toothUnit.querySelector(`.${faceClass}`);
+                            if (polygon) {
+                                polygon.classList.add(applyClass);
+                                if (isDefectuosa) { polygon.style.stroke = 'var(--caries)'; polygon.style.strokeWidth = '4px'; }
+                            }
+                        } else {
+                            toothUnit.querySelectorAll('.tooth-face').forEach(p => {
+                                p.classList.add(applyClass);
+                                if (isDefectuosa) { p.style.stroke = 'var(--caries)'; p.style.strokeWidth = '4px'; }
+                            });
+                        }
+                    }
+                });
+
+                // Force light-mode colors for PDF capture
+                tempOdontogram.querySelectorAll('.tooth-number').forEach(el => el.style.color = '#111827');
+                tempOdontogram.querySelectorAll('.tooth-face').forEach(el => {
+                    if (!el.classList.contains('face-caries') &&
+                        !el.classList.contains('face-restoration') &&
+                        !el.classList.contains('face-sealant') &&
+                        !el.classList.contains('face-fracture')) {
+                        el.style.fill = '#FFFFFF';
+                    }
+                    el.style.stroke = '#333';
+                });
+            }
+
+            const doc = await generateOdontogramPDF(pInfo, currentDetailPatient.findings, tempOdontogram);
             doc.save(`Odontograma_${pInfo.name.replace(/\s+/g, '_') || 'Paciente'}.pdf`);
+
+            // Cleanup temporary odontogram
+            if (tempOdontogram && tempOdontogram.parentNode) {
+                tempOdontogram.parentNode.removeChild(tempOdontogram);
+            }
         } catch (e) {
             console.error('Error generando PDF desde historial:', e);
             alert('Error al generar el PDF.');
