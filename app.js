@@ -130,12 +130,20 @@ document.addEventListener('DOMContentLoaded', () => {
                     <!-- Overlays: Endodoncia line -->
                     <line x1="50" y1="0" x2="50" y2="100" class="tooth-overlay endo-line hidden" stroke="#EF4444" stroke-width="4" />
                     
-                    <!-- Overlays: Caries incipiente dots -->
+                    <!-- Overlays: Caries incipiente dots (center of each face) -->
                     <circle cx="50" cy="27" r="4" class="tooth-overlay dot-face-top hidden" fill="#EF4444" />
                     <circle cx="50" cy="73" r="4" class="tooth-overlay dot-face-bottom hidden" fill="#EF4444" />
                     <circle cx="50" cy="50" r="4" class="tooth-overlay dot-face-center hidden" fill="#EF4444" />
                     <circle cx="27" cy="50" r="4" class="tooth-overlay dot-face-left hidden" fill="#EF4444" />
                     <circle cx="73" cy="50" r="4" class="tooth-overlay dot-face-right hidden" fill="#EF4444" />
+
+                    <!-- Overlays: Caries incipiente dots (sub-location: face + mesial/distal) -->
+                    <!-- Vestibular (top) por mesial (left) / distal (right) -->
+                    <circle cx="30" cy="27" r="4" class="tooth-overlay dot-face-top-left hidden" fill="#EF4444" />
+                    <circle cx="70" cy="27" r="4" class="tooth-overlay dot-face-top-right hidden" fill="#EF4444" />
+                    <!-- Palatino/Lingual (bottom) por mesial (left) / distal (right) -->
+                    <circle cx="30" cy="73" r="4" class="tooth-overlay dot-face-bottom-left hidden" fill="#EF4444" />
+                    <circle cx="70" cy="73" r="4" class="tooth-overlay dot-face-bottom-right hidden" fill="#EF4444" />
 
                     <!-- Overlays: Abrasión / Erosión (Línea en el cuello) -->
                     <line x1="20" y1="20" x2="80" y2="20" class="tooth-overlay abrasion-top hidden" stroke="#EF4444" stroke-width="6" />
@@ -454,17 +462,65 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (canonical === 'vestibular') mappedFaceClass = 'face-top';
                     if (canonical === 'palatino' || canonical === 'lingual') mappedFaceClass = 'face-bottom';
                     if (canonical === 'oclusal') mappedFaceClass = 'face-center';
-                    if (canonical === 'mesial') mappedFaceClass = 'face-left'; // Approximation
-                    if (canonical === 'distal') mappedFaceClass = 'face-right'; // Approximation
+                    if (canonical === 'mesial') mappedFaceClass = 'face-left';
+                    if (canonical === 'distal') mappedFaceClass = 'face-right';
                     break;
                 }
             }
             if (foundFace && !foundFace.includes('giro')) break;
         }
 
+        // Compound face for caries incipiente: "vestibular por mesial", "lingual por distal", etc.
+        if (foundCondition && foundCondition.includes('incipiente')) {
+            // Detect primary face (vestibular/palatino/lingual) and sub-position (mesial/distal)
+            const compoundMatch = text.match(/(?:cara\s+)?(vestibular|palatino|palatina|lingual)\s+(?:por\s+)?(mesial|distal)/i);
+            if (compoundMatch) {
+                const primaryFace = compoundMatch[1].toLowerCase();
+                const subPos = compoundMatch[2].toLowerCase();
+
+                // Map primary face to top/bottom
+                let primaryClass = 'face-top'; // vestibular
+                if (primaryFace === 'palatino' || primaryFace === 'palatina' || primaryFace === 'lingual') {
+                    primaryClass = 'face-bottom';
+                }
+
+                // Map sub-position to left/right
+                let subClass = 'left'; // mesial
+                if (subPos === 'distal') {
+                    subClass = 'right';
+                }
+
+                mappedFaceClass = `${primaryClass}-${subClass}`;
+                foundFace = `${primaryFace} por ${subPos}`;
+            }
+        }
+
         if (foundCondition && foundCondition.includes("giroversion") && foundFace) {
             mappedFaceClass = foundFace;
             foundCondition = "giroversion " + (foundFace === "giro-left" ? "izquierda" : "derecha");
+        }
+
+        // Auto-correct palatino/lingual based on tooth quadrant
+        // Upper teeth (quadrants 1,2 = 11-28, and 5,6 = 51-65) → palatino
+        // Lower teeth (quadrants 3,4 = 31-48, and 7,8 = 71-85) → lingual
+        if (foundUnit && foundFace) {
+            const quadrant = parseInt(foundUnit.toString()[0]);
+            const isUpper = [1, 2, 5, 6].includes(quadrant);
+
+            if (foundFace === 'palatino' && !isUpper) {
+                foundFace = 'lingual';
+            } else if (foundFace === 'lingual' && isUpper) {
+                foundFace = 'palatino';
+            }
+
+            // Also fix compound faces like "palatino por mesial" → "lingual por mesial"
+            if (typeof foundFace === 'string' && foundFace.includes(' por ')) {
+                if (foundFace.includes('palatino') && !isUpper) {
+                    foundFace = foundFace.replace('palatino', 'lingual');
+                } else if (foundFace.includes('lingual') && isUpper) {
+                    foundFace = foundFace.replace('lingual', 'palatino');
+                }
+            }
         }
 
         if (foundCondition && foundUnit) {
@@ -631,10 +687,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 const dot = toothUnit.querySelector(`.dot-${faceClass}`);
                 if (dot) dot.classList.remove('hidden');
             } else {
-                // If no face specified, dot in center
                 const dot = toothUnit.querySelector(`.dot-face-center`);
                 if (dot) dot.classList.remove('hidden');
             }
+
+            // Also check for sub-location (e.g. "face-top-left")
+            // The compound faceClass like "face-top-left" is set by the parser
+            // when it detects "vestibular por mesial" etc.
+
             return;
         }
 
