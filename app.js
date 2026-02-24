@@ -137,6 +137,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     <circle cx="27" cy="50" r="4" class="tooth-overlay dot-face-left hidden" fill="#EF4444" />
                     <circle cx="73" cy="50" r="4" class="tooth-overlay dot-face-right hidden" fill="#EF4444" />
 
+                    <!-- Overlays: Abrasión / Erosión (Línea en el cuello) -->
+                    <line x1="20" y1="20" x2="80" y2="20" class="tooth-overlay abrasion-top hidden" stroke="#EF4444" stroke-width="6" />
+                    <line x1="20" y1="80" x2="80" y2="80" class="tooth-overlay abrasion-bottom hidden" stroke="#EF4444" stroke-width="6" />
+
+                    <!-- Overlays: Atricción (Línea central) -->
+                    <line x1="20" y1="50" x2="80" y2="50" class="tooth-overlay atriccion-center hidden" stroke="#EF4444" stroke-width="5" />
+
+                    <!-- Overlays: Diente en erupción (Círculo alrededor) -->
+                    <circle cx="50" cy="50" r="40" class="tooth-overlay eruption-circle hidden" fill="none" stroke="#2563EB" stroke-width="4" stroke-dasharray="6,4" />
+
                     <!-- Overlays: Giroversion (Arrows below tooth) -->
                     <g class="tooth-overlay giro-right hidden">
                         <path d="M 20,105 Q 50,115 80,105" fill="none" stroke="#EF4444" stroke-width="4" />
@@ -589,7 +599,37 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // 3. Other solid fills/strokes
+        // 5. Abrasión / Erosión (Línea en el cuello, vestibular o palatino)
+        if (condLower.includes('abrasion') || condLower.includes('abrasión') || condLower.includes('erosion') || condLower.includes('erosión')) {
+            if (faceClass === 'face-top') {
+                const line = toothUnit.querySelector('.abrasion-top');
+                if (line) line.classList.remove('hidden');
+            } else if (faceClass === 'face-bottom') {
+                const line = toothUnit.querySelector('.abrasion-bottom');
+                if (line) line.classList.remove('hidden');
+            } else {
+                // Default to top if face not specified clearly
+                const line = toothUnit.querySelector('.abrasion-top');
+                if (line) line.classList.remove('hidden');
+            }
+            return;
+        }
+
+        // 6. Atricción (Línea central oclusal)
+        if (condLower.includes('atriccion') || condLower.includes('atricción')) {
+            const line = toothUnit.querySelector('.atriccion-center');
+            if (line) line.classList.remove('hidden');
+            return;
+        }
+
+        // 7. Diente en Erupción
+        if (condLower.includes('erupcion') || condLower.includes('erupción')) {
+            const circle = toothUnit.querySelector('.eruption-circle');
+            if (circle) circle.classList.remove('hidden');
+            return;
+        }
+
+        // 8. Other solid fills/strokes
         let applyClass = '';
         let isDefectuosa = false;
 
