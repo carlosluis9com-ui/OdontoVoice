@@ -1021,18 +1021,21 @@ document.addEventListener('DOMContentLoaded', () => {
         btnDownloadPdf.disabled = true;
 
         try {
-            // Generate PDF as blob for sharing + also save it
-            const pdfBlob = await html2pdf().set(opt).from(element).outputPdf('blob');
+            // Generate PDF blob using the correct html2pdf chain
+            const worker = html2pdf().set(opt).from(element);
+            const pdfBlob = await worker.toPdf().output('blob');
 
             // Download the PDF
             const url = URL.createObjectURL(pdfBlob);
             const a = document.createElement('a');
             a.href = url;
             a.download = pdfFilename;
+            document.body.appendChild(a);
             a.click();
-            URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
 
-            // Offer to share via native share (WhatsApp, Gmail, etc.)
+            // Offer to share via native share on mobile (WhatsApp, Gmail, etc.)
             if (navigator.share && navigator.canShare) {
                 const file = new File([pdfBlob], pdfFilename, { type: 'application/pdf' });
                 if (navigator.canShare({ files: [file] })) {
@@ -1043,8 +1046,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             files: [file]
                         });
                     } catch (shareErr) {
-                        // User cancelled share - that's fine
-                        console.log('Share cancelled or failed:', shareErr);
+                        console.log('Share cancelled:', shareErr);
                     }
                 }
             }
