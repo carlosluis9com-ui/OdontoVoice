@@ -886,7 +886,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const isBlueCross = condLower.includes('ausencia') || condLower.includes('ausente');
             const crossColor = isBlueCross ? "var(--restoration)" : "var(--caries)"; // var(--restoration) = blue
 
-            line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+            const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
             line.setAttribute("x1", "0");
             line.setAttribute("y1", "0");
             line.setAttribute("x2", "100");
@@ -894,7 +894,7 @@ document.addEventListener('DOMContentLoaded', () => {
             line.setAttribute("stroke", crossColor);
             line.setAttribute("stroke-width", "4");
 
-            line2 = document.createElementNS("http://www.w3.org/2000/svg", "line");
+            const line2 = document.createElementNS("http://www.w3.org/2000/svg", "line");
             line2.setAttribute("x1", "0");
             line2.setAttribute("y1", "100");
             line2.setAttribute("x2", "100");
