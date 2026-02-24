@@ -1006,12 +1006,61 @@ document.addEventListener('DOMContentLoaded', () => {
     btnDownloadPdf.addEventListener('click', async () => {
         const element = document.getElementById('pdf-export-area');
 
-        // Save to Firebase Database first (with encryption)
+        // Options for html2pdf
+        const pdfFilename = `Odontograma_${inputs.name.value.replace(/\s+/g, '_') || 'Paciente'}.pdf`;
+        const opt = {
+            margin: 10,
+            filename: pdfFilename,
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: { scale: 2, useCORS: true, windowWidth: 1024 },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        };
+
+        // 1. Generate and download PDF FIRST (using plain text data)
+        btnDownloadPdf.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Generando...';
+        btnDownloadPdf.disabled = true;
+
+        try {
+            // Generate PDF as blob for sharing + also save it
+            const pdfBlob = await html2pdf().set(opt).from(element).outputPdf('blob');
+
+            // Download the PDF
+            const url = URL.createObjectURL(pdfBlob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = pdfFilename;
+            a.click();
+            URL.revokeObjectURL(url);
+
+            // Offer to share via native share (WhatsApp, Gmail, etc.)
+            if (navigator.share && navigator.canShare) {
+                const file = new File([pdfBlob], pdfFilename, { type: 'application/pdf' });
+                if (navigator.canShare({ files: [file] })) {
+                    try {
+                        await navigator.share({
+                            title: 'Odontograma - ' + (inputs.name.value || 'Paciente'),
+                            text: 'Reporte de odontograma',
+                            files: [file]
+                        });
+                    } catch (shareErr) {
+                        // User cancelled share - that's fine
+                        console.log('Share cancelled or failed:', shareErr);
+                    }
+                }
+            }
+        } catch (pdfErr) {
+            console.error('Error generando PDF:', pdfErr);
+            alert('Error al generar el PDF.');
+        }
+
+        btnDownloadPdf.innerHTML = '<i class="fa-solid fa-file-pdf"></i> Guardar PDF';
+        btnDownloadPdf.disabled = false;
+
+        // 2. THEN save encrypted data to Firestore in the background
         if (currentUser && inputs.name.value) {
             try {
                 const uid = currentUser.uid;
 
-                // Encrypt sensitive fields
                 const encName = await encryptText(inputs.name.value, uid);
                 const encPhone = await encryptText(inputs.phone.value || '', uid);
                 const encPathologies = await encryptText(inputs.pathologies.value || '', uid);
@@ -1021,12 +1070,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     doctorId: uid,
                     doctorEmail: currentUser.email,
                     patientName: encName,
-                    patientAge: inputs.age.value, // age is not PII
-                    patientSex: inputs.sex.value, // sex is not PII
+                    patientAge: inputs.age.value,
+                    patientSex: inputs.sex.value,
                     patientPhone: encPhone,
                     pathologies: encPathologies,
                     findings: encFindings,
-                    encrypted: true, // flag to know this record is encrypted
+                    encrypted: true,
                     timestamp: serverTimestamp()
                 };
 
@@ -1034,27 +1083,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.log("Paciente guardado en la nube (encriptado)");
             } catch (e) {
                 console.error("Error al guardar paciente:", e);
-                alert("Error guardando el respaldo en la nube.");
             }
         }
-
-        // Options for html2pdf
-        const opt = {
-            margin: 10,
-            filename: `Odontograma_${inputs.name.value.replace(/\s+/g, '_') || 'Paciente'}.pdf`,
-            image: { type: 'jpeg', quality: 0.98 },
-            html2canvas: { scale: 2, useCORS: true, windowWidth: 1024 }, // windowWidth forces desktop rendering layout for mobiles
-            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-        };
-
-        // Temporarily adjust styles for PDF
-        btnDownloadPdf.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Generando...';
-        btnDownloadPdf.disabled = true;
-
-        html2pdf().set(opt).from(element).save().then(() => {
-            btnDownloadPdf.innerHTML = '<i class="fa-solid fa-file-pdf"></i> Guardar PDF';
-            btnDownloadPdf.disabled = false;
-        });
     });
 
     // --- 6. FEEDBACK MODAL ---
