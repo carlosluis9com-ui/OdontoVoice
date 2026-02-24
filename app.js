@@ -281,19 +281,27 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             if (finalTranscript) {
-                const trimmed = finalTranscript.trim().toLowerCase();
+                const trimmed = finalTranscript.trim();
                 const now = Date.now();
 
                 // Skip if identical to the last processed transcript within 3 seconds
-                if (trimmed === lastProcessedTranscript && (now - lastProcessedTime) < 3000) {
+                if (trimmed.toLowerCase() === lastProcessedTranscript.toLowerCase() && (now - lastProcessedTime) < 3000) {
                     return;
                 }
 
                 lastProcessedTranscript = trimmed;
                 lastProcessedTime = now;
 
-                showToast('Procesando: ' + finalTranscript);
-                processTranscript(trimmed);
+                // Append to dictation textarea instead of processing immediately
+                const dictationArea = document.getElementById('dictation-textarea');
+                if (dictationArea) {
+                    const currentText = dictationArea.value.trim();
+                    dictationArea.value = currentText ? currentText + '. ' + trimmed : trimmed;
+                    // Auto-scroll to bottom
+                    dictationArea.scrollTop = dictationArea.scrollHeight;
+                }
+
+                showToast('Agregado al texto final');
             }
         };
 
@@ -350,6 +358,58 @@ document.addEventListener('DOMContentLoaded', () => {
             try { recognition.stop(); } catch (e) { }
         }
         stopListeningIndicator();
+    }
+
+    // --- DICTATION NOTEPAD LOGIC ---
+    const dictationArea = document.getElementById('dictation-textarea');
+    const btnClearDictation = document.getElementById('btn-clear-dictation');
+    const btnAnalyzeDictation = document.getElementById('btn-analyze-dictation');
+
+    if (btnClearDictation && dictationArea) {
+        btnClearDictation.addEventListener('click', () => {
+            if (confirm('¿Limpiar todo el texto dictado?')) {
+                dictationArea.value = '';
+            }
+        });
+    }
+
+    if (btnAnalyzeDictation && dictationArea) {
+        btnAnalyzeDictation.addEventListener('click', () => {
+            const text = dictationArea.value.trim();
+            if (!text) {
+                alert('No hay texto para analizar. Empieza a dictar o escribe algo.');
+                return;
+            }
+
+            // Stop listening before processing
+            if (isListening) stopListening();
+
+            const oldBtnHtml = btnAnalyzeDictation.innerHTML;
+            btnAnalyzeDictation.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Analizando...';
+            btnAnalyzeDictation.disabled = true;
+
+            // Process the entire text block. The parser can handle multiple sentences.
+            setTimeout(() => {
+                const sentences = text.toLowerCase().split(/[.¡!¿?]/);
+                let processedCount = 0;
+                sentences.forEach(s => {
+                    const trimmed = s.trim();
+                    if (trimmed.length > 5) { // Avoid processing tiny fragments
+                        processTranscript(trimmed);
+                        processedCount++;
+                    }
+                });
+
+                // Done
+                btnAnalyzeDictation.innerHTML = oldBtnHtml;
+                btnAnalyzeDictation.disabled = false;
+
+                if (processedCount > 0) {
+                    showToast('¡Texto analizado!');
+                    dictationArea.value = ''; // Clear text after successful analyze
+                }
+            }, 100);
+        });
     }
 
     micBtn.addEventListener('click', () => {
