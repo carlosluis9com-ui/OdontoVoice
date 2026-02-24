@@ -1,5 +1,25 @@
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-app.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-auth.js";
+import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
+
+const firebaseConfig = {
+    apiKey: "AIzaSyBwHs9Or3qhpThQsSEmC2Ccb5s8FPQqEC8",
+    authDomain: "odontovoice.firebaseapp.com",
+    projectId: "odontovoice",
+    storageBucket: "odontovoice.firebasestorage.app",
+    messagingSenderId: "123401121009",
+    appId: "1:123401121009:web:4d59a820d0d5c16d9fcd50",
+    measurementId: "G-ED3PE24J93"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const provider = new GoogleAuthProvider();
+
+let currentUser = null;
+
 document.addEventListener('DOMContentLoaded', () => {
-    // UI Elements
     const themeToggleBtn = document.getElementById('theme-toggle');
     const micBtn = document.getElementById('mic-btn');
     const listeningStatus = document.getElementById('listening-status');
@@ -29,7 +49,44 @@ document.addEventListener('DOMContentLoaded', () => {
     let recognition = null;
     let clinicalFindings = []; // Stores objects like { unit: 11, face: "vestibular", condition: "caries incipiente" }
 
-    // --- 1. THEME TOGGLE ---
+    // --- 1. FIREBASE AUTH & THEME ---
+    const btnLogin = document.getElementById('btn-login');
+    const btnLogout = document.getElementById('btn-logout');
+    const userInfo = document.getElementById('user-info');
+    const userAvatar = document.getElementById('user-avatar');
+
+    // Auth State Listener
+    onAuthStateChanged(auth, (user) => {
+        if (user) {
+            currentUser = user;
+            btnLogin.classList.add('hidden');
+            userInfo.classList.remove('hidden');
+            userAvatar.src = user.photoURL;
+        } else {
+            currentUser = null;
+            btnLogin.classList.remove('hidden');
+            userInfo.classList.add('hidden');
+            userAvatar.src = "";
+        }
+    });
+
+    btnLogin.addEventListener('click', async () => {
+        try {
+            await signInWithPopup(auth, provider);
+        } catch (error) {
+            console.error("Error al iniciar sesión:", error);
+            alert("Error al iniciar sesión con Google");
+        }
+    });
+
+    btnLogout.addEventListener('click', async () => {
+        try {
+            await signOut(auth);
+        } catch (error) {
+            console.error("Error al cerrar sesión", error);
+        }
+    });
+
     themeToggleBtn.addEventListener('click', () => {
         const currentTheme = document.documentElement.getAttribute('data-theme');
         if (currentTheme === 'dark') {
@@ -668,8 +725,30 @@ document.addEventListener('DOMContentLoaded', () => {
         mount.appendChild(clone);
     }
 
-    btnDownloadPdf.addEventListener('click', () => {
+    btnDownloadPdf.addEventListener('click', async () => {
         const element = document.getElementById('pdf-export-area');
+
+        // Save to Firebase Database first
+        if (currentUser && inputs.name.value) {
+            const patientData = {
+                doctorId: currentUser.uid,
+                doctorEmail: currentUser.email,
+                patientName: inputs.name.value,
+                patientAge: inputs.age.value,
+                patientSex: inputs.sex.value,
+                patientPhone: inputs.phone.value,
+                pathologies: inputs.pathologies.value,
+                findings: clinicalFindings,
+                timestamp: serverTimestamp()
+            };
+            try {
+                await addDoc(collection(db, "patients"), patientData);
+                console.log("Paciente guardado en la nube");
+            } catch (e) {
+                console.error("Error al guardar paciente:", e);
+                alert("Error guardando el respaldo en la nube.");
+            }
+        }
 
         // Options for html2pdf
         const opt = {
@@ -688,6 +767,52 @@ document.addEventListener('DOMContentLoaded', () => {
             btnDownloadPdf.innerHTML = '<i class="fa-solid fa-file-pdf"></i> Guardar PDF';
             btnDownloadPdf.disabled = false;
         });
+    });
+
+    // --- 6. FEEDBACK MODAL ---
+    const btnOpenFeedback = document.getElementById('btn-open-feedback');
+    const btnCloseFeedback = document.getElementById('btn-close-feedback');
+    const btnSendFeedback = document.getElementById('btn-send-feedback');
+    const feedbackModal = document.getElementById('feedback-modal');
+    const feedbackText = document.getElementById('feedback-text');
+
+    btnOpenFeedback.addEventListener('click', () => {
+        feedbackModal.classList.remove('hidden');
+    });
+
+    btnCloseFeedback.addEventListener('click', () => {
+        feedbackModal.classList.add('hidden');
+    });
+
+    btnSendFeedback.addEventListener('click', async () => {
+        const text = feedbackText.value.trim();
+        if (!text) {
+            alert('Por favor escribe un mensaje primero.');
+            return;
+        }
+
+        btnSendFeedback.disabled = true;
+        btnSendFeedback.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Enviando...';
+
+        const feedbackData = {
+            text: text,
+            timestamp: serverTimestamp(),
+            userId: currentUser ? currentUser.uid : 'anonymous',
+            userEmail: currentUser ? currentUser.email : 'unknown'
+        };
+
+        try {
+            await addDoc(collection(db, "feedback"), feedbackData);
+            alert("¡Gracias por tu sugerencia! La hemos recibido correctamente.");
+            feedbackText.value = '';
+            feedbackModal.classList.add('hidden');
+        } catch (e) {
+            console.error("Error al enviar feedback", e);
+            alert("Hubo un error al enviar el feedback. Intenta más tarde.");
+        } finally {
+            btnSendFeedback.disabled = false;
+            btnSendFeedback.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Enviar';
+        }
     });
 
 });

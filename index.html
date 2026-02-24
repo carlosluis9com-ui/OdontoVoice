@@ -23,7 +23,16 @@
                 <i class="fa-solid fa-tooth logo-icon"></i>
                 <h1>OdontoVoice</h1>
             </div>
-            <button id="theme-toggle" class="icon-btn"><i class="fa-solid fa-moon"></i></button>
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <div id="user-info" class="hidden" style="display: flex; align-items: center; gap: 8px;">
+                    <img id="user-avatar" src="" alt="Avatar" style="width: 32px; height: 32px; border-radius: 50%;">
+                    <button id="btn-logout" class="btn btn-secondary"
+                        style="padding: 4px 8px; font-size: 0.8rem;">Salir</button>
+                </div>
+                <button id="btn-login" class="btn btn-primary" style="padding: 6px 12px; font-size: 0.9rem;"><i
+                        class="fa-brands fa-google"></i> Ingresar</button>
+                <button id="theme-toggle" class="icon-btn"><i class="fa-solid fa-moon"></i></button>
+            </div>
         </header>
 
         <main id="main-content">
@@ -172,11 +181,34 @@
             <span>Ver Informe</span>
         </button>
 
+        <!-- Feedback Button -->
+        <button id="btn-open-feedback" class="btn btn-secondary"
+            style="position: fixed; bottom: 20px; left: 20px; z-index: 99; border-radius: 20px; box-shadow: var(--shadow-md);">
+            <i class="fa-solid fa-comment-dots"></i> Feedback
+        </button>
+
+        <!-- Feedback Modal -->
+        <div id="feedback-modal" class="hidden"
+            style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; display: flex; align-items: center; justify-content: center;">
+            <div class="card" style="width: 90%; max-width: 400px; padding: 20px; position: relative;">
+                <button id="btn-close-feedback"
+                    style="position: absolute; top: 10px; right: 15px; background: none; border: none; font-size: 1.5rem; cursor: pointer;">&times;</button>
+                <h3 style="margin-bottom: 15px;"><i class="fa-solid fa-lightbulb"></i> Enviar Sugerencia</h3>
+                <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 15px;">Ayúdanos a mejorar. ¿Qué
+                    falla o qué te gustaría ver?</p>
+                <textarea id="feedback-text" rows="4"
+                    style="width: 100%; padding: 10px; border-radius: var(--radius-md); border: 1px solid var(--border); margin-bottom: 15px; background: var(--surface);"
+                    placeholder="Escribe aquí tu opinión..."></textarea>
+                <button id="btn-send-feedback" class="btn btn-primary" style="width: 100%;"><i
+                        class="fa-solid fa-paper-plane"></i> Enviar</button>
+            </div>
+        </div>
+
         <!-- Live Transcript Toast -->
         <div id="transcript-toast" class="toast"></div>
     </div>
 
-    <script src="app.js"></script>
+    <script type="module" src="app.js"></script>
 </body>
 
 </html>
