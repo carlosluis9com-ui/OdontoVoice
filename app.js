@@ -177,6 +177,9 @@ document.addEventListener('DOMContentLoaded', () => {
     renderOdontogram();
 
     // --- 3. SPEECH RECOGNITION SETUP ---
+    let lastProcessedTranscript = ''; // Prevents processing the same phrase twice
+    let lastProcessedTime = 0;
+
     function initSpeechRecognition() {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) {
@@ -185,9 +188,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const rec = new SpeechRecognition();
-        rec.lang = 'es-ES'; // Spanish
-        rec.continuous = true; // Keep listening
-        rec.interimResults = true; // Show live transcript
+        rec.lang = 'es-ES';
+        rec.continuous = false; // Single utterance mode - prevents Android duplication
+        rec.interimResults = true;
 
         rec.onstart = () => {
             isListening = true;
@@ -212,24 +215,41 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             if (finalTranscript) {
+                const trimmed = finalTranscript.trim().toLowerCase();
+                const now = Date.now();
+
+                // Skip if identical to the last processed transcript within 3 seconds
+                if (trimmed === lastProcessedTranscript && (now - lastProcessedTime) < 3000) {
+                    console.log('Duplicate transcript skipped:', trimmed);
+                    return;
+                }
+
+                lastProcessedTranscript = trimmed;
+                lastProcessedTime = now;
+
                 showToast('Procesando: ' + finalTranscript);
-                processTranscript(finalTranscript.toLowerCase());
+                processTranscript(trimmed);
             }
         };
 
         rec.onerror = (event) => {
             console.error('Speech recognition error', event.error);
-            showToast('Error: ' + event.error);
-            stopListening();
+            // Don't show alert for 'no-speech' or 'aborted' - these are normal on mobile
+            if (event.error !== 'no-speech' && event.error !== 'aborted') {
+                showToast('Error: ' + event.error);
+            }
+            // Don't call stopListening here - let onend handle restart
         };
 
         rec.onend = () => {
             if (isListening) {
-                // Auto-restart if it stopped but shouldn't have
+                // Auto-restart for the next utterance
                 try {
-                    rec.start();
+                    setTimeout(() => {
+                        if (isListening) rec.start();
+                    }, 100); // Small delay prevents DOMException on Android
                 } catch (e) {
-                    console.warn("Could not auto-restart recognition", e);
+                    console.warn('Could not auto-restart recognition', e);
                 }
             } else {
                 stopListeningIndicator();
@@ -486,7 +506,19 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function addFinding(unit, condition, face, mappedFaceClass) {
-        const findingId = `finding-${Date.now()}`;
+        // Deduplication: reject if the exact same unit+condition was added < 3 seconds ago
+        const now = Date.now();
+        const isDuplicate = clinicalFindings.some(f => {
+            return f.unit === unit &&
+                f.condition.toLowerCase() === condition.toLowerCase() &&
+                (now - (f._timestamp || 0)) < 3000;
+        });
+        if (isDuplicate) {
+            console.log('Duplicate finding rejected:', unit, condition);
+            return;
+        }
+
+        const findingId = `finding-${now}`;
 
         // Remove empty state
         const emptyState = findingsList.querySelector('.empty-state');
@@ -496,7 +528,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const condCapital = condition.charAt(0).toUpperCase() + condition.slice(1);
 
         // Add to array
-        clinicalFindings.push({ id: findingId, unit, condition, face, mappedFaceClass });
+        clinicalFindings.push({ id: findingId, unit, condition, face, mappedFaceClass, _timestamp: now });
 
         // Add to UI List
         const li = document.createElement('li');
