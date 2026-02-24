@@ -884,7 +884,7 @@ document.addEventListener('DOMContentLoaded', () => {
             applyClass = 'face-fracture';
 
             const isBlueCross = condLower.includes('ausencia') || condLower.includes('ausente');
-            const crossColor = isBlueCross ? "var(--restoration)" : "var(--caries)"; // var(--restoration) = blue
+            const crossColor = isBlueCross ? "#3B82F6" : "#EF4444"; // #3B82F6 = blue (restoration), #EF4444 = red (caries)
 
             const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
             line.setAttribute("x1", "0");
@@ -893,6 +893,7 @@ document.addEventListener('DOMContentLoaded', () => {
             line.setAttribute("y2", "100");
             line.setAttribute("stroke", crossColor);
             line.setAttribute("stroke-width", "4");
+            line.setAttribute("class", "tooth-overlay");
 
             const line2 = document.createElementNS("http://www.w3.org/2000/svg", "line");
             line2.setAttribute("x1", "0");
@@ -901,6 +902,7 @@ document.addEventListener('DOMContentLoaded', () => {
             line2.setAttribute("y2", "0");
             line2.setAttribute("stroke", crossColor);
             line2.setAttribute("stroke-width", "4");
+            line2.setAttribute("class", "tooth-overlay");
 
             const svgGroup = toothUnit.querySelector('.tooth-svg');
             if (svgGroup) {
@@ -1588,17 +1590,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (condLower.includes('fractura')) applyClass = 'face-fracture';
                     if (condLower.includes('exodoncia') || condLower.includes('ausencia') || condLower.includes('ausente')) {
                         const isBlueCross = condLower.includes('ausencia') || condLower.includes('ausente');
-                        const crossColor = isBlueCross ? 'var(--restoration)' : 'var(--caries)';
+                        const crossColor = isBlueCross ? '#3B82F6' : '#EF4444';
                         const svgGroup = toothUnit.querySelector('.tooth-svg');
                         if (svgGroup) {
                             const l1 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
                             l1.setAttribute('x1', '0'); l1.setAttribute('y1', '0');
                             l1.setAttribute('x2', '100'); l1.setAttribute('y2', '100');
                             l1.setAttribute('stroke', crossColor); l1.setAttribute('stroke-width', '4');
+                            l1.setAttribute('class', 'tooth-overlay');
                             const l2 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
                             l2.setAttribute('x1', '0'); l2.setAttribute('y1', '100');
                             l2.setAttribute('x2', '100'); l2.setAttribute('y2', '0');
                             l2.setAttribute('stroke', crossColor); l2.setAttribute('stroke-width', '4');
+                            l2.setAttribute('class', 'tooth-overlay');
                             svgGroup.appendChild(l1); svgGroup.appendChild(l2);
                         }
                         return;
