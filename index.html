@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice Odontograma</title>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Font Awesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- html2pdf for PDF generation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header>
+            <div class="header-content">
+                <i class="fa-solid fa-tooth logo-icon"></i>
+                <h1>OdontoVoice</h1>
+            </div>
+            <button id="theme-toggle" class="icon-btn"><i class="fa-solid fa-moon"></i></button>
+        </header>
+
+        <main id="main-content">
+            <!-- Patient Data Section -->
+            <section class="card patient-data-section">
+                <h2><i class="fa-solid fa-user"></i> Datos del Paciente</h2>
+                <div class="form-grid">
+                    <div class="input-group">
+                        <label for="p-name">Nombre Completo</label>
+                        <input type="text" id="p-name" placeholder="Ej. Juan Pérez">
+                    </div>
+                    <div class="input-group row-2">
+                        <div class="half-width">
+                            <label for="p-age">Edad</label>
+                            <input type="number" id="p-age" placeholder="Años">
+                        </div>
+                        <div class="half-width">
+                            <label for="p-sex">Sexo</label>
+                            <select id="p-sex">
+                                <option value="">Seleccione...</option>
+                                <option value="Masculino">Masculino</option>
+                                <option value="Femenino">Femenino</option>
+                                <option value="Otro">Otro</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="input-group">
+                        <label for="p-phone">Teléfono</label>
+                        <input type="tel" id="p-phone" placeholder="Ej. 123456789">
+                    </div>
+                    <div class="input-group full-width">
+                        <label for="p-pathologies">Patologías Registradas</label>
+                        <textarea id="p-pathologies" rows="2" placeholder="Ej. Hipertensión, Diabetes..."></textarea>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Odontogram Section -->
+            <section class="card odontogram-section">
+                <div class="section-header">
+                    <h2><i class="fa-solid fa-teeth"></i> Odontodiagrama</h2>
+                    <span class="status-badge">Adulto/Niño</span>
+                </div>
+
+                <div class="odontogram-container" id="odontogram-container">
+                    <!-- Odontogram grid will be generated via JS to keep HTML clean -->
+                    <div id="odontogram-adult-upper" class="jaw-row"></div>
+                    <div id="odontogram-child-upper" class="jaw-row child-jaw"></div>
+                    <div class="midline-divider"></div>
+                    <div id="odontogram-child-lower" class="jaw-row child-jaw"></div>
+                    <div id="odontogram-adult-lower" class="jaw-row"></div>
+                </div>
+            </section>
+
+            <!-- Findings Section -->
+            <section class="card findings-section">
+                <h2><i class="fa-solid fa-list-check"></i> Hallazgos Clínicos</h2>
+
+                <!-- Manual Entry Form -->
+                <div class="manual-entry-form"
+                    style="display: flex; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap; align-items: flex-end; background: var(--background); padding: 1rem; border-radius: var(--radius-md); border: 1px solid var(--border);">
+                    <div class="input-group" style="flex: 1; min-width: 70px;">
+                        <label for="manual-unit">Pieza</label>
+                        <input type="number" id="manual-unit" placeholder="Ej. 11">
+                    </div>
+                    <div class="input-group" style="flex: 2; min-width: 140px;">
+                        <label for="manual-condition">Condición</label>
+                        <select id="manual-condition">
+                            <option value="">Seleccione...</option>
+                            <option value="caries">Caries</option>
+                            <option value="caries incipiente">Caries Incipiente</option>
+                            <option value="caries moderada">Caries Moderada</option>
+                            <option value="caries avanzada">Caries Avanzada</option>
+                            <option value="fractura">Fractura</option>
+                            <option value="restauracion">Restauración en Correctas Condiciones</option>
+                            <option value="restauracion defectuosa">Restauración Defectuosa / Caries Recidiva</option>
+                            <option value="sellante">Sellante</option>
+                            <option value="exodoncia">Exodoncia</option>
+                            <option value="ausencia">Diente Ausente</option>
+                            <option value="endodoncia">Endodoncia</option>
+                            <option value="diastema">Diastema</option>
+                            <option value="giroversion derecha">Giroversión Derecha</option>
+                            <option value="giroversion izquierda">Giroversión Izquierda</option>
+                        </select>
+                    </div>
+                    <div class="input-group" style="flex: 2; min-width: 130px;">
+                        <label for="manual-face">Cara</label>
+                        <select id="manual-face">
+                            <option value="">Toda la pieza</option>
+                            <option value="vestibular">Vestibular</option>
+                            <option value="palatino">Palatino / Lingual</option>
+                            <option value="mesial">Mesial</option>
+                            <option value="distal">Distal</option>
+                            <option value="oclusal">Oclusal / Incisal</option>
+                        </select>
+                    </div>
+                    <button id="btn-add-manual" class="btn btn-primary" style="height: 48px; padding: 0 1.25rem;"><i
+                            class="fa-solid fa-plus"></i> Añadir</button>
+                </div>
+
+                <ul class="findings-list" id="findings-list">
+                    <li class="empty-state">No hay hallazgos registrados. Use el micrófono o el formulario para
+                        registrar.</li>
+                    <!-- Findings will be populated here -->
+                </ul>
+            </section>
+        </main>
+
+        <!-- Generate Report View (Hidden by default) -->
+        <main id="report-content" class="hidden">
+            <section class="card report-section" id="pdf-export-area">
+                <div class="report-header">
+                    <i class="fa-solid fa-tooth report-logo"></i>
+                    <h2>Informe Odontológico</h2>
+                    <p class="report-date" id="report-date"></p>
+                </div>
+
+                <div class="report-body" contenteditable="true" id="editable-report">
+                    <!-- Content populated by JS -->
+                </div>
+
+                <!-- We'll append a clone of the odontogram here for the PDF -->
+                <div id="report-odontogram-mount"></div>
+            </section>
+
+            <div class="action-buttons-container">
+                <button id="btn-back-to-edit" class="btn btn-secondary"><i class="fa-solid fa-arrow-left"></i>
+                    Volver</button>
+                <button id="btn-download-pdf" class="btn btn-primary"><i class="fa-solid fa-file-pdf"></i> Guardar
+                    PDF</button>
+            </div>
+        </main>
+
+        <!-- Floating Mic Button -->
+        <div class="mic-container">
+            <div class="mic-ripple" id="mic-ripple"></div>
+            <button id="mic-btn" class="mic-btn">
+                <i class="fa-solid fa-microphone"></i>
+            </button>
+            <div class="listening-status" id="listening-status">Tocá para hablar...</div>
+        </div>
+
+        <!-- Generate Report Button -->
+        <button id="btn-generate-report" class="floating-action-btn">
+            <i class="fa-solid fa-file-lines"></i>
+            <span>Ver Informe</span>
+        </button>
+
+        <!-- Live Transcript Toast -->
+        <div id="transcript-toast" class="toast"></div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+
+</html>
