@@ -19,6 +19,62 @@ const provider = new GoogleAuthProvider();
 
 let currentUser = null;
 
+// --- ENCRYPTION HELPERS (AES-GCM via Web Crypto API) ---
+// Derives a unique AES-256 key from the doctor's UID
+async function deriveKey(uid) {
+    const encoder = new TextEncoder();
+    const keyMaterial = await crypto.subtle.importKey(
+        'raw',
+        encoder.encode(uid),
+        'PBKDF2',
+        false,
+        ['deriveKey']
+    );
+    return crypto.subtle.deriveKey(
+        {
+            name: 'PBKDF2',
+            salt: encoder.encode('odontovoice-salt-2024'),
+            iterations: 100000,
+            hash: 'SHA-256'
+        },
+        keyMaterial,
+        { name: 'AES-GCM', length: 256 },
+        false,
+        ['encrypt', 'decrypt']
+    );
+}
+
+// Encrypts a string → returns a base64-encoded string (iv + ciphertext)
+async function encryptText(plainText, uid) {
+    const key = await deriveKey(uid);
+    const encoder = new TextEncoder();
+    const iv = crypto.getRandomValues(new Uint8Array(12)); // 96-bit IV for AES-GCM
+    const encrypted = await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv },
+        key,
+        encoder.encode(plainText)
+    );
+    // Combine IV + ciphertext into one array, then base64
+    const combined = new Uint8Array(iv.length + encrypted.byteLength);
+    combined.set(iv);
+    combined.set(new Uint8Array(encrypted), iv.length);
+    return btoa(String.fromCharCode(...combined));
+}
+
+// Decrypts a base64 string → returns the original plain text
+async function decryptText(base64Str, uid) {
+    const key = await deriveKey(uid);
+    const combined = Uint8Array.from(atob(base64Str), c => c.charCodeAt(0));
+    const iv = combined.slice(0, 12);
+    const ciphertext = combined.slice(12);
+    const decrypted = await crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv },
+        key,
+        ciphertext
+    );
+    return new TextDecoder().decode(decrypted);
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     const themeToggleBtn = document.getElementById('theme-toggle');
     const micBtn = document.getElementById('mic-btn');
@@ -950,22 +1006,32 @@ document.addEventListener('DOMContentLoaded', () => {
     btnDownloadPdf.addEventListener('click', async () => {
         const element = document.getElementById('pdf-export-area');
 
-        // Save to Firebase Database first
+        // Save to Firebase Database first (with encryption)
         if (currentUser && inputs.name.value) {
-            const patientData = {
-                doctorId: currentUser.uid,
-                doctorEmail: currentUser.email,
-                patientName: inputs.name.value,
-                patientAge: inputs.age.value,
-                patientSex: inputs.sex.value,
-                patientPhone: inputs.phone.value,
-                pathologies: inputs.pathologies.value,
-                findings: clinicalFindings,
-                timestamp: serverTimestamp()
-            };
             try {
+                const uid = currentUser.uid;
+
+                // Encrypt sensitive fields
+                const encName = await encryptText(inputs.name.value, uid);
+                const encPhone = await encryptText(inputs.phone.value || '', uid);
+                const encPathologies = await encryptText(inputs.pathologies.value || '', uid);
+                const encFindings = await encryptText(JSON.stringify(clinicalFindings), uid);
+
+                const patientData = {
+                    doctorId: uid,
+                    doctorEmail: currentUser.email,
+                    patientName: encName,
+                    patientAge: inputs.age.value, // age is not PII
+                    patientSex: inputs.sex.value, // sex is not PII
+                    patientPhone: encPhone,
+                    pathologies: encPathologies,
+                    findings: encFindings,
+                    encrypted: true, // flag to know this record is encrypted
+                    timestamp: serverTimestamp()
+                };
+
                 await addDoc(collection(db, "patients"), patientData);
-                console.log("Paciente guardado en la nube");
+                console.log("Paciente guardado en la nube (encriptado)");
             } catch (e) {
                 console.error("Error al guardar paciente:", e);
                 alert("Error guardando el respaldo en la nube.");
