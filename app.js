@@ -1003,90 +1003,55 @@ document.addEventListener('DOMContentLoaded', () => {
         mount.appendChild(clone);
     }
 
-    btnDownloadPdf.addEventListener('click', async () => {
+    btnDownloadPdf.addEventListener('click', () => {
         const element = document.getElementById('pdf-export-area');
 
-        // Options for html2pdf
-        const pdfFilename = `Odontograma_${inputs.name.value.replace(/\s+/g, '_') || 'Paciente'}.pdf`;
         const opt = {
             margin: 10,
-            filename: pdfFilename,
+            filename: `Odontograma_${inputs.name.value.replace(/\s+/g, '_') || 'Paciente'}.pdf`,
             image: { type: 'jpeg', quality: 0.98 },
             html2canvas: { scale: 2, useCORS: true, windowWidth: 1024 },
             jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
         };
 
-        // 1. Generate and download PDF FIRST (using plain text data)
+        // Show loading state
         btnDownloadPdf.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Generando...';
         btnDownloadPdf.disabled = true;
 
-        try {
-            // Generate PDF blob using the correct html2pdf chain
-            const worker = html2pdf().set(opt).from(element);
-            const pdfBlob = await worker.toPdf().output('blob');
+        // 1. Generate and save PDF using the proven .save() method
+        html2pdf().set(opt).from(element).save().then(async () => {
+            // Restore button
+            btnDownloadPdf.innerHTML = '<i class="fa-solid fa-file-pdf"></i> Guardar PDF';
+            btnDownloadPdf.disabled = false;
 
-            // Download the PDF
-            const url = URL.createObjectURL(pdfBlob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = pdfFilename;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            setTimeout(() => URL.revokeObjectURL(url), 1000);
+            // 2. AFTER PDF is saved, encrypt and upload to Firestore in background
+            if (currentUser && inputs.name.value) {
+                try {
+                    const uid = currentUser.uid;
 
-            // Offer to share via native share on mobile (WhatsApp, Gmail, etc.)
-            if (navigator.share && navigator.canShare) {
-                const file = new File([pdfBlob], pdfFilename, { type: 'application/pdf' });
-                if (navigator.canShare({ files: [file] })) {
-                    try {
-                        await navigator.share({
-                            title: 'Odontograma - ' + (inputs.name.value || 'Paciente'),
-                            text: 'Reporte de odontograma',
-                            files: [file]
-                        });
-                    } catch (shareErr) {
-                        console.log('Share cancelled:', shareErr);
-                    }
+                    const encName = await encryptText(inputs.name.value, uid);
+                    const encPhone = await encryptText(inputs.phone.value || '', uid);
+                    const encPathologies = await encryptText(inputs.pathologies.value || '', uid);
+                    const encFindings = await encryptText(JSON.stringify(clinicalFindings), uid);
+
+                    await addDoc(collection(db, "patients"), {
+                        doctorId: uid,
+                        doctorEmail: currentUser.email,
+                        patientName: encName,
+                        patientAge: inputs.age.value,
+                        patientSex: inputs.sex.value,
+                        patientPhone: encPhone,
+                        pathologies: encPathologies,
+                        findings: encFindings,
+                        encrypted: true,
+                        timestamp: serverTimestamp()
+                    });
+                    console.log("Paciente guardado en la nube (encriptado)");
+                } catch (e) {
+                    console.error("Error al guardar en la nube:", e);
                 }
             }
-        } catch (pdfErr) {
-            console.error('Error generando PDF:', pdfErr);
-            alert('Error al generar el PDF.');
-        }
-
-        btnDownloadPdf.innerHTML = '<i class="fa-solid fa-file-pdf"></i> Guardar PDF';
-        btnDownloadPdf.disabled = false;
-
-        // 2. THEN save encrypted data to Firestore in the background
-        if (currentUser && inputs.name.value) {
-            try {
-                const uid = currentUser.uid;
-
-                const encName = await encryptText(inputs.name.value, uid);
-                const encPhone = await encryptText(inputs.phone.value || '', uid);
-                const encPathologies = await encryptText(inputs.pathologies.value || '', uid);
-                const encFindings = await encryptText(JSON.stringify(clinicalFindings), uid);
-
-                const patientData = {
-                    doctorId: uid,
-                    doctorEmail: currentUser.email,
-                    patientName: encName,
-                    patientAge: inputs.age.value,
-                    patientSex: inputs.sex.value,
-                    patientPhone: encPhone,
-                    pathologies: encPathologies,
-                    findings: encFindings,
-                    encrypted: true,
-                    timestamp: serverTimestamp()
-                };
-
-                await addDoc(collection(db, "patients"), patientData);
-                console.log("Paciente guardado en la nube (encriptado)");
-            } catch (e) {
-                console.error("Error al guardar paciente:", e);
-            }
-        }
+        });
     });
 
     // --- 6. FEEDBACK MODAL ---
