@@ -18,7 +18,24 @@
 </head>
 
 <body>
-    <div class="app-container">
+    <!-- Beta Lock Screen -->
+    <div id="lock-screen"
+        style="display: flex; height: 100vh; width: 100vw; align-items: center; justify-content: center; background: var(--background); position: fixed; top: 0; left: 0; z-index: 10000;">
+        <div class="card"
+            style="text-align: center; padding: 2rem; max-width: 90%; width: 400px; box-shadow: var(--shadow-lg);">
+            <i class="fa-solid fa-lock" style="font-size: 3rem; color: var(--primary); margin-bottom: 1rem;"></i>
+            <h2>Acceso Restringido</h2>
+            <p style="color: var(--text-muted); margin-bottom: 1rem; font-size: 0.95rem;">Validando invitación beta...
+            </p>
+            <div id="lock-spinner" style="font-size: 1.5rem; color: var(--primary);"><i
+                    class="fa-solid fa-spinner fa-spin"></i></div>
+            <div id="lock-error" class="hidden" style="color: var(--danger); margin-top: 1rem; font-weight: 500;">
+                <i class="fa-solid fa-triangle-exclamation"></i> Enlace inválido o ya utilizado.
+            </div>
+        </div>
+    </div>
+
+    <div class="app-container hidden" id="main-app-container">
         <!-- Header -->
         <header>
             <div class="header-content">

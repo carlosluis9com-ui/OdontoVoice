@@ -83,6 +83,70 @@ async function decryptText(base64Str, uid) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+
+    // --- BETA ACCESS CONTROL ---
+    const lockScreen = document.getElementById('lock-screen');
+    const mainAppContainer = document.getElementById('main-app-container');
+    const lockSpinner = document.getElementById('lock-spinner');
+    const lockError = document.getElementById('lock-error');
+
+    async function checkBetaAccess() {
+        if (localStorage.getItem('betaAccessGranted') === 'true') {
+            if (lockScreen) lockScreen.style.display = 'none';
+            if (mainAppContainer) mainAppContainer.classList.remove('hidden');
+            return;
+        }
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const token = urlParams.get('token');
+
+        if (!token) {
+            lockSpinner.classList.add('hidden');
+            lockError.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Acceso denegado: Se requiere un enlace de invitación beta.';
+            lockError.classList.remove('hidden');
+            return;
+        }
+
+        try {
+            const tokenRef = doc(db, 'beta_tokens', token);
+            const tokenSnap = await getDoc(tokenRef);
+
+            if (tokenSnap.exists()) {
+                if (tokenSnap.data().used === false) {
+                    // Valid and unused token! Mark as used.
+                    await setDoc(tokenRef, { used: true }, { merge: true });
+
+                    // Grant access
+                    localStorage.setItem('betaAccessGranted', 'true');
+
+                    // Clean URL (remove ?token=... so it isn't copied accidentally)
+                    if (window.history.replaceState) {
+                        window.history.replaceState({}, document.title, window.location.pathname);
+                    }
+
+                    // Show app
+                    if (lockScreen) lockScreen.style.display = 'none';
+                    if (mainAppContainer) mainAppContainer.classList.remove('hidden');
+                } else {
+                    lockSpinner.classList.add('hidden');
+                    lockError.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Este enlace de invitación ya ha sido utilizado.';
+                    lockError.classList.remove('hidden');
+                }
+            } else {
+                lockSpinner.classList.add('hidden');
+                lockError.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Enlace de invitación inválido.';
+                lockError.classList.remove('hidden');
+            }
+        } catch (error) {
+            console.error("Error validating token", error);
+            lockSpinner.classList.add('hidden');
+            lockError.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Error de conexión al validar. Intenta nuevamente.';
+            lockError.classList.remove('hidden');
+        }
+    }
+
+    checkBetaAccess();
+
     const themeToggleBtn = document.getElementById('theme-toggle');
     const micBtn = document.getElementById('mic-btn');
     const listeningStatus = document.getElementById('listening-status');
