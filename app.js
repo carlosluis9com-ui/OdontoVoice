@@ -448,6 +448,21 @@ document.addEventListener('DOMContentLoaded', () => {
         let foundFace = null;
         let mappedFaceClass = null;
 
+        // Helper: determine mesial/distal → SVG left/right based on quadrant
+        // Mesial = toward midline, Distal = away from midline
+        // Quadrants 1,4,5,8 (right side of mouth): mesial is toward center = RIGHT in SVG
+        // Quadrants 2,3,6,7 (left side of mouth): mesial is toward center = LEFT in SVG
+        function getMesialDistalMapping(unitStr) {
+            const q = parseInt(unitStr.toString()[0]);
+            const rightSide = [1, 4, 5, 8].includes(q); // right side of mouth
+            return {
+                mesialClass: rightSide ? 'face-right' : 'face-left',
+                distalClass: rightSide ? 'face-left' : 'face-right',
+                mesialSub: rightSide ? 'right' : 'left',
+                distalSub: rightSide ? 'left' : 'right'
+            };
+        }
+
         // Special check for giroversion direction
         if (foundCondition && foundCondition.includes("giroversion")) {
             if (text.includes("izquierda")) foundFace = "giro-left";
@@ -462,8 +477,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (canonical === 'vestibular') mappedFaceClass = 'face-top';
                     if (canonical === 'palatino' || canonical === 'lingual') mappedFaceClass = 'face-bottom';
                     if (canonical === 'oclusal') mappedFaceClass = 'face-center';
-                    if (canonical === 'mesial') mappedFaceClass = 'face-left';
-                    if (canonical === 'distal') mappedFaceClass = 'face-right';
+                    if (canonical === 'mesial' && foundUnit) {
+                        mappedFaceClass = getMesialDistalMapping(foundUnit).mesialClass;
+                    }
+                    if (canonical === 'distal' && foundUnit) {
+                        mappedFaceClass = getMesialDistalMapping(foundUnit).distalClass;
+                    }
                     break;
                 }
             }
@@ -471,12 +490,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Compound face for caries incipiente: "vestibular por mesial", "lingual por distal", etc.
-        if (foundCondition && foundCondition.includes('incipiente')) {
-            // Detect primary face (vestibular/palatino/lingual) and sub-position (mesial/distal)
+        if (foundCondition && foundCondition.includes('incipiente') && foundUnit) {
             const compoundMatch = text.match(/(?:cara\s+)?(vestibular|palatino|palatina|lingual)\s+(?:por\s+)?(mesial|distal)/i);
             if (compoundMatch) {
                 const primaryFace = compoundMatch[1].toLowerCase();
                 const subPos = compoundMatch[2].toLowerCase();
+                const mapping = getMesialDistalMapping(foundUnit);
 
                 // Map primary face to top/bottom
                 let primaryClass = 'face-top'; // vestibular
@@ -484,11 +503,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     primaryClass = 'face-bottom';
                 }
 
-                // Map sub-position to left/right
-                let subClass = 'left'; // mesial
-                if (subPos === 'distal') {
-                    subClass = 'right';
-                }
+                // Map mesial/distal to correct SVG side based on quadrant
+                let subClass = (subPos === 'mesial') ? mapping.mesialSub : mapping.distalSub;
 
                 mappedFaceClass = `${primaryClass}-${subClass}`;
                 foundFace = `${primaryFace} por ${subPos}`;
@@ -501,8 +517,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Auto-correct palatino/lingual based on tooth quadrant
-        // Upper teeth (quadrants 1,2 = 11-28, and 5,6 = 51-65) → palatino
-        // Lower teeth (quadrants 3,4 = 31-48, and 7,8 = 71-85) → lingual
         if (foundUnit && foundFace) {
             const quadrant = parseInt(foundUnit.toString()[0]);
             const isUpper = [1, 2, 5, 6].includes(quadrant);
@@ -513,7 +527,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 foundFace = 'palatino';
             }
 
-            // Also fix compound faces like "palatino por mesial" → "lingual por mesial"
             if (typeof foundFace === 'string' && foundFace.includes(' por ')) {
                 if (foundFace.includes('palatino') && !isUpper) {
                     foundFace = foundFace.replace('palatino', 'lingual');
