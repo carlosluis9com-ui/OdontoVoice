@@ -463,6 +463,18 @@ document.addEventListener('DOMContentLoaded', () => {
             };
         }
 
+        // Helper: determine vestibular/lingual/palatino → SVG top/bottom based on quadrant
+        // UPPER teeth (Q 1,2,5,6): vestibular = TOP, palatino = BOTTOM
+        // LOWER teeth (Q 3,4,7,8): lingual = TOP, vestibular = BOTTOM
+        function getVestLingMapping(unitStr) {
+            const q = parseInt(unitStr.toString()[0]);
+            const isUpper = [1, 2, 5, 6].includes(q);
+            return {
+                vestibularClass: isUpper ? 'face-top' : 'face-bottom',
+                linguoPalatClass: isUpper ? 'face-bottom' : 'face-top'
+            };
+        }
+
         // Special check for giroversion direction
         if (foundCondition && foundCondition.includes("giroversion")) {
             if (text.includes("izquierda")) foundFace = "giro-left";
@@ -473,9 +485,19 @@ document.addEventListener('DOMContentLoaded', () => {
             for (const alias of aliases) {
                 if (text.includes(`por ${alias}`) || text.includes(`cara ${alias}`) || text.includes(alias)) {
                     foundFace = canonical;
-                    // Map to SVG class
-                    if (canonical === 'vestibular') mappedFaceClass = 'face-top';
-                    if (canonical === 'palatino' || canonical === 'lingual') mappedFaceClass = 'face-bottom';
+                    // Map to SVG class using quadrant-aware helpers
+                    if (canonical === 'vestibular' && foundUnit) {
+                        mappedFaceClass = getVestLingMapping(foundUnit).vestibularClass;
+                    } else if (canonical === 'vestibular') {
+                        mappedFaceClass = 'face-top'; // fallback
+                    }
+                    if (canonical === 'palatino' || canonical === 'lingual') {
+                        if (foundUnit) {
+                            mappedFaceClass = getVestLingMapping(foundUnit).linguoPalatClass;
+                        } else {
+                            mappedFaceClass = 'face-bottom'; // fallback
+                        }
+                    }
                     if (canonical === 'oclusal') mappedFaceClass = 'face-center';
                     if (canonical === 'mesial' && foundUnit) {
                         mappedFaceClass = getMesialDistalMapping(foundUnit).mesialClass;
@@ -495,16 +517,19 @@ document.addEventListener('DOMContentLoaded', () => {
             if (compoundMatch) {
                 const primaryFace = compoundMatch[1].toLowerCase();
                 const subPos = compoundMatch[2].toLowerCase();
-                const mapping = getMesialDistalMapping(foundUnit);
+                const mdMapping = getMesialDistalMapping(foundUnit);
+                const vlMapping = getVestLingMapping(foundUnit);
 
-                // Map primary face to top/bottom
-                let primaryClass = 'face-top'; // vestibular
-                if (primaryFace === 'palatino' || primaryFace === 'palatina' || primaryFace === 'lingual') {
-                    primaryClass = 'face-bottom';
+                // Map primary face to top/bottom using quadrant
+                let primaryClass;
+                if (primaryFace === 'vestibular') {
+                    primaryClass = vlMapping.vestibularClass;
+                } else {
+                    primaryClass = vlMapping.linguoPalatClass;
                 }
 
                 // Map mesial/distal to correct SVG side based on quadrant
-                let subClass = (subPos === 'mesial') ? mapping.mesialSub : mapping.distalSub;
+                let subClass = (subPos === 'mesial') ? mdMapping.mesialSub : mdMapping.distalSub;
 
                 mappedFaceClass = `${primaryClass}-${subClass}`;
                 foundFace = `${primaryFace} por ${subPos}`;
@@ -557,30 +582,35 @@ document.addEventListener('DOMContentLoaded', () => {
             let mappedFaceClass = null;
             let displayFace = face; // what we show in the UI
 
-            if (face) {
-                if (face === 'vestibular') mappedFaceClass = 'face-top';
-                if (face === 'palatino') mappedFaceClass = 'face-bottom';
+            if (face && unit) {
+                const q = parseInt(unit.toString()[0]);
+                const isUpper = [1, 2, 5, 6].includes(q);
+                const rightSide = [1, 4, 5, 8].includes(q);
+
+                // Quadrant-aware: upper vest=top, lower vest=bottom
+                if (face === 'vestibular') mappedFaceClass = isUpper ? 'face-top' : 'face-bottom';
+                if (face === 'palatino') mappedFaceClass = isUpper ? 'face-bottom' : 'face-top';
                 if (face === 'oclusal') mappedFaceClass = 'face-center';
                 if (face === 'mesial') {
-                    const q = parseInt(unit.toString()[0]);
-                    mappedFaceClass = [1, 4, 5, 8].includes(q) ? 'face-right' : 'face-left';
+                    mappedFaceClass = rightSide ? 'face-right' : 'face-left';
                 }
                 if (face === 'distal') {
-                    const q = parseInt(unit.toString()[0]);
-                    mappedFaceClass = [1, 4, 5, 8].includes(q) ? 'face-left' : 'face-right';
+                    mappedFaceClass = rightSide ? 'face-left' : 'face-right';
                 }
 
                 // Compound faces: vestibular-mesial, palatino-distal, etc.
                 if (face.includes('-')) {
-                    const parts = face.split('-'); // e.g. ['vestibular', 'mesial']
+                    const parts = face.split('-');
                     const primaryFace = parts[0];
                     const subPos = parts[1];
-                    const q = parseInt(unit.toString()[0]);
-                    const rightSide = [1, 4, 5, 8].includes(q);
-                    const isUpper = [1, 2, 5, 6].includes(q);
 
-                    let primaryClass = 'face-top';
-                    if (primaryFace === 'palatino' || primaryFace === 'lingual') primaryClass = 'face-bottom';
+                    // Primary face mapping (quadrant-aware)
+                    let primaryClass;
+                    if (primaryFace === 'vestibular') {
+                        primaryClass = isUpper ? 'face-top' : 'face-bottom';
+                    } else {
+                        primaryClass = isUpper ? 'face-bottom' : 'face-top';
+                    }
 
                     let subClass = (subPos === 'mesial')
                         ? (rightSide ? 'right' : 'left')
