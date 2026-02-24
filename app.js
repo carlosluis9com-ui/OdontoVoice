@@ -452,7 +452,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function extractOdontogramData(text) {
         // Special command: Delete last finding
-        // Catch variations: "elimina el hallazgo", "eliminar", "borrar el anterior", "borra el ultimo"
         if (text.match(/(elimina|eliminar|borra|borrar).*?(hallazgo|anterior|ultimo|último)/i)) {
             if (clinicalFindings.length > 0) {
                 const lastFinding = clinicalFindings[clinicalFindings.length - 1];
@@ -461,10 +460,8 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 showToast("No hay hallazgos para eliminar");
             }
-            return; // Skip normal parsing
+            return;
         }
-
-        // Look for pattern: "[Category] en [unidad/diente] [number] (en la cara / por) [face]"
 
         const conditions = [
             "caries incipiente", "caries moderada", "caries avanzada", "caries recidiva", "caries",
@@ -472,12 +469,12 @@ document.addEventListener('DOMContentLoaded', () => {
             "fractura", "abrasion", "abrasión", "erosion", "erosión", "atriccion", "atricción",
             "restauracion defectuosa", "restauración defectuosa",
             "restauracion", "restauración", "sellante",
-            "endodoncia", "exodoncia", "diente ausente",
+            "endodoncia", "exodoncia", "diente ausente", "ausencia",
             "corona", "puente", "protesis", "prótesis", "diastema", "giroversion", "diente en erupcion"
         ];
 
         const facesDict = {
-            "mesial": ["mesial", "derecha", "izquierda"], // Will map logically later based on quad
+            "mesial": ["mesial", "derecha", "izquierda"],
             "distal": ["distal"],
             "vestibular": ["vestibular", "arriba", "frente"],
             "palatino": ["palatino", "lingual", "abajo"],
@@ -485,57 +482,72 @@ document.addEventListener('DOMContentLoaded', () => {
             "oclusal": ["oclusal", "incisal", "centro"]
         };
 
-        // Attempt a basic parse
-        // Loop over text to find combinations
+        // Determine condition
         let foundCondition = null;
         for (const cond of conditions) {
             if (text.includes(cond)) {
                 foundCondition = cond;
-                break; // Found the most prominent condition
+                break;
             }
         }
 
-        // Find unit number
-        const unitMatch = text.match(/(?:unidad|diente|pieza(?:s)?)\s+(\d{2})/i);
-        let foundUnit = unitMatch ? unitMatch[1] : null;
+        let foundUnits = [];
 
-        // Special check for diastema to catch "entre 11 y 12"
+        // Determine units
         if (foundCondition === "diastema") {
             const multiUnits = text.match(/\b([1-4|5-8][1-8])\s*y\s*([1-4|5-8][1-8])\b/i);
             if (multiUnits) {
                 let u1 = parseInt(multiUnits[1]);
                 let u2 = parseInt(multiUnits[2]);
-                // Determine which one is "first" visually based on array order
                 let idx1 = -1, idx2 = -1;
                 for (const arr of [jawData.adultUpper, jawData.childUpper, jawData.childLower, jawData.adultLower]) {
                     if (arr.includes(u1)) idx1 = arr.indexOf(u1);
                     if (arr.includes(u2)) idx2 = arr.indexOf(u2);
                     if (idx1 > -1 && idx2 > -1) break;
                 }
-                if (idx1 > -1 && idx2 > -1) {
-                    foundUnit = idx1 < idx2 ? u1.toString() : u2.toString();
-                } else {
-                    foundUnit = u1.toString();
+                let diastemaUnit = (idx1 > -1 && idx2 > -1) ? (idx1 < idx2 ? u1.toString() : u2.toString()) : u1.toString();
+                foundUnits.push(diastemaUnit);
+            }
+        } else {
+            // Find all teeth following "unidad(es)", "pieza(s)", "diente(s)"
+            const multiUnitMatch = text.match(/(?:unidad|unidades|diente|dientes|pieza|piezas)\s+((?:\d{2}[\s,y-]*)+)/i);
+            if (multiUnitMatch) {
+                const numbers = multiUnitMatch[1].match(/\b([1-8][1-8])\b/g);
+                if (numbers) {
+                    foundUnits = numbers;
                 }
+            }
+            // Fallback: just find any standalone 2 digit valid teeth numbers
+            if (foundUnits.length === 0 && foundCondition) {
+                const standaloneUnits = text.match(/\b([1-8][1-8])\b/g);
+                if (standaloneUnits) foundUnits = standaloneUnits;
             }
         }
 
-        if (!foundUnit && foundCondition) {
-            const standaloneUnit = text.match(/\b([1-4|5-8][1-8])\b/);
-            if (standaloneUnit) foundUnit = standaloneUnit[1];
+        if (foundUnits.length === 0) return;
+
+        // Raw face canonical matches (global for all teeth in this phrase)
+        let rawFaceCanonical = null;
+        // Special check for giroversion direction
+        let giroDirection = null;
+        if (foundCondition && foundCondition.includes("giroversion")) {
+            if (text.includes("izquierda")) giroDirection = "giro-left";
+            else if (text.includes("derecha")) giroDirection = "giro-right";
         }
 
-        // Find face
-        let foundFace = null;
-        let mappedFaceClass = null;
+        for (const [canonical, aliases] of Object.entries(facesDict)) {
+            for (const alias of aliases) {
+                if (text.includes(`por ${alias}`) || text.includes(`cara ${alias}`) || text.includes(alias)) {
+                    rawFaceCanonical = canonical;
+                    break;
+                }
+            }
+            if (rawFaceCanonical && !rawFaceCanonical.includes('giro')) break;
+        }
 
-        // Helper: determine mesial/distal → SVG left/right based on quadrant
-        // Mesial = toward midline, Distal = away from midline
-        // Quadrants 1,4,5,8 (right side of mouth): mesial is toward center = RIGHT in SVG
-        // Quadrants 2,3,6,7 (left side of mouth): mesial is toward center = LEFT in SVG
         function getMesialDistalMapping(unitStr) {
             const q = parseInt(unitStr.toString()[0]);
-            const rightSide = [1, 4, 5, 8].includes(q); // right side of mouth
+            const rightSide = [1, 4, 5, 8].includes(q);
             return {
                 mesialClass: rightSide ? 'face-right' : 'face-left',
                 distalClass: rightSide ? 'face-left' : 'face-right',
@@ -544,9 +556,6 @@ document.addEventListener('DOMContentLoaded', () => {
             };
         }
 
-        // Helper: determine vestibular/lingual/palatino → SVG top/bottom based on quadrant
-        // UPPER teeth (Q 1,2,5,6): vestibular = TOP, palatino = BOTTOM
-        // LOWER teeth (Q 3,4,7,8): lingual = TOP, vestibular = BOTTOM
         function getVestLingMapping(unitStr) {
             const q = parseInt(unitStr.toString()[0]);
             const isUpper = [1, 2, 5, 6].includes(q);
@@ -556,95 +565,61 @@ document.addEventListener('DOMContentLoaded', () => {
             };
         }
 
-        // Special check for giroversion direction
-        if (foundCondition && foundCondition.includes("giroversion")) {
-            if (text.includes("izquierda")) foundFace = "giro-left";
-            else if (text.includes("derecha")) foundFace = "giro-right";
-        }
+        // Loop through each extracted tooth number
+        foundUnits.forEach(unit => {
+            let mappedFaceClass = null;
+            let displayFace = rawFaceCanonical;
+            let currentCondition = foundCondition;
 
-        for (const [canonical, aliases] of Object.entries(facesDict)) {
-            for (const alias of aliases) {
-                if (text.includes(`por ${alias}`) || text.includes(`cara ${alias}`) || text.includes(alias)) {
-                    foundFace = canonical;
-                    // Map to SVG class using quadrant-aware helpers
-                    if (canonical === 'vestibular' && foundUnit) {
-                        mappedFaceClass = getVestLingMapping(foundUnit).vestibularClass;
-                    } else if (canonical === 'vestibular') {
-                        mappedFaceClass = 'face-top'; // fallback
-                    }
-                    if (canonical === 'palatino' || canonical === 'lingual') {
-                        if (foundUnit) {
-                            mappedFaceClass = getVestLingMapping(foundUnit).linguoPalatClass;
-                        } else {
-                            mappedFaceClass = 'face-bottom'; // fallback
-                        }
-                    }
-                    if (canonical === 'oclusal') mappedFaceClass = 'face-center';
-                    if (canonical === 'mesial' && foundUnit) {
-                        mappedFaceClass = getMesialDistalMapping(foundUnit).mesialClass;
-                    }
-                    if (canonical === 'distal' && foundUnit) {
-                        mappedFaceClass = getMesialDistalMapping(foundUnit).distalClass;
-                    }
-                    break;
+            if (rawFaceCanonical) {
+                if (rawFaceCanonical === 'vestibular') mappedFaceClass = getVestLingMapping(unit).vestibularClass;
+                if (rawFaceCanonical === 'palatino' || rawFaceCanonical === 'lingual') mappedFaceClass = getVestLingMapping(unit).linguoPalatClass;
+                if (rawFaceCanonical === 'oclusal') mappedFaceClass = 'face-center';
+                if (rawFaceCanonical === 'mesial') mappedFaceClass = getMesialDistalMapping(unit).mesialClass;
+                if (rawFaceCanonical === 'distal') mappedFaceClass = getMesialDistalMapping(unit).distalClass;
+            }
+
+            // Compound face for caries incipiente
+            if (currentCondition && currentCondition.includes('incipiente')) {
+                const compoundMatch = text.match(/(?:cara\s+)?(vestibular|palatino|palatina|lingual)\s+(?:por\s+)?(mesial|distal)/i);
+                if (compoundMatch) {
+                    const primaryFace = compoundMatch[1].toLowerCase();
+                    const subPos = compoundMatch[2].toLowerCase();
+                    const mdMapping = getMesialDistalMapping(unit);
+                    const vlMapping = getVestLingMapping(unit);
+
+                    let primaryClass = (primaryFace === 'vestibular') ? vlMapping.vestibularClass : vlMapping.linguoPalatClass;
+                    let subClass = (subPos === 'mesial') ? mdMapping.mesialSub : mdMapping.distalSub;
+
+                    mappedFaceClass = `${primaryClass}-${subClass}`;
+                    displayFace = `${primaryFace} por ${subPos}`;
                 }
             }
-            if (foundFace && !foundFace.includes('giro')) break;
-        }
 
-        // Compound face for caries incipiente: "vestibular por mesial", "lingual por distal", etc.
-        if (foundCondition && foundCondition.includes('incipiente') && foundUnit) {
-            const compoundMatch = text.match(/(?:cara\s+)?(vestibular|palatino|palatina|lingual)\s+(?:por\s+)?(mesial|distal)/i);
-            if (compoundMatch) {
-                const primaryFace = compoundMatch[1].toLowerCase();
-                const subPos = compoundMatch[2].toLowerCase();
-                const mdMapping = getMesialDistalMapping(foundUnit);
-                const vlMapping = getVestLingMapping(foundUnit);
-
-                // Map primary face to top/bottom using quadrant
-                let primaryClass;
-                if (primaryFace === 'vestibular') {
-                    primaryClass = vlMapping.vestibularClass;
-                } else {
-                    primaryClass = vlMapping.linguoPalatClass;
-                }
-
-                // Map mesial/distal to correct SVG side based on quadrant
-                let subClass = (subPos === 'mesial') ? mdMapping.mesialSub : mdMapping.distalSub;
-
-                mappedFaceClass = `${primaryClass}-${subClass}`;
-                foundFace = `${primaryFace} por ${subPos}`;
-            }
-        }
-
-        if (foundCondition && foundCondition.includes("giroversion") && foundFace) {
-            mappedFaceClass = foundFace;
-            foundCondition = "giroversion " + (foundFace === "giro-left" ? "izquierda" : "derecha");
-        }
-
-        // Auto-correct palatino/lingual based on tooth quadrant
-        if (foundUnit && foundFace) {
-            const quadrant = parseInt(foundUnit.toString()[0]);
-            const isUpper = [1, 2, 5, 6].includes(quadrant);
-
-            if (foundFace === 'palatino' && !isUpper) {
-                foundFace = 'lingual';
-            } else if (foundFace === 'lingual' && isUpper) {
-                foundFace = 'palatino';
+            if (currentCondition && currentCondition.includes("giroversion") && giroDirection) {
+                mappedFaceClass = giroDirection;
+                currentCondition = "giroversion " + (giroDirection === "giro-left" ? "izquierda" : "derecha");
+                displayFace = giroDirection;
             }
 
-            if (typeof foundFace === 'string' && foundFace.includes(' por ')) {
-                if (foundFace.includes('palatino') && !isUpper) {
-                    foundFace = foundFace.replace('palatino', 'lingual');
-                } else if (foundFace.includes('lingual') && isUpper) {
-                    foundFace = foundFace.replace('lingual', 'palatino');
+            // Auto-correct palatino/lingual based on tooth quadrant
+            if (displayFace) {
+                const quadrant = parseInt(unit.toString()[0]);
+                const isUpper = [1, 2, 5, 6].includes(quadrant);
+
+                if (displayFace === 'palatino' && !isUpper) displayFace = 'lingual';
+                else if (displayFace === 'lingual' && isUpper) displayFace = 'palatino';
+
+                if (displayFace.includes(' por ')) {
+                    if (displayFace.includes('palatino') && !isUpper) displayFace = displayFace.replace('palatino', 'lingual');
+                    else if (displayFace.includes('lingual') && isUpper) displayFace = displayFace.replace('lingual', 'palatino');
                 }
             }
-        }
 
-        if (foundCondition && foundUnit) {
-            addFinding(foundUnit, foundCondition, foundFace, mappedFaceClass);
-        }
+            if (currentCondition) {
+                addFinding(unit, currentCondition, displayFace, mappedFaceClass);
+            }
+        });
     }
 
     // Manual Entry Logic
