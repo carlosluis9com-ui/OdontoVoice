@@ -26,6 +26,8 @@
             <div style="display: flex; gap: 10px; align-items: center;">
                 <div id="user-info" class="hidden" style="display: flex; align-items: center; gap: 8px;">
                     <img id="user-avatar" src="" alt="Avatar" style="width: 32px; height: 32px; border-radius: 50%;">
+                    <button id="btn-history" class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;"><i
+                            class="fa-solid fa-clock-rotate-left"></i> Historial</button>
                     <button id="btn-logout" class="btn btn-secondary"
                         style="padding: 4px 8px; font-size: 0.8rem;">Salir</button>
                 </div>
@@ -214,6 +216,40 @@
                         class="fa-solid fa-paper-plane"></i> Enviar</button>
             </div>
         </div>
+
+        <!-- Patient History View (Hidden by default) -->
+        <main id="history-content" class="hidden">
+            <section class="card">
+                <div class="section-header"
+                    style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <h2 style="margin: 0;"><i class="fa-solid fa-clock-rotate-left"></i> Historial</h2>
+                    <button id="btn-back-from-history" class="btn btn-secondary" style="padding: 6px 12px;"><i
+                            class="fa-solid fa-arrow-left"></i> Volver</button>
+                </div>
+
+                <input type="text" id="history-search-input" placeholder="Buscar por nombre..."
+                    style="width: 100%; padding: 10px; border-radius: var(--radius-md); border: 1px solid var(--border); font-size: 16px; background: var(--surface); color: var(--text-main); margin-bottom: 1rem;">
+
+                <div id="history-list" style="display: flex; flex-direction: column; gap: 0.75rem;">
+                    <p style="text-align: center; color: var(--text-muted); padding: 2rem;"><i
+                            class="fa-solid fa-spinner fa-spin"></i> Cargando...</p>
+                </div>
+            </section>
+        </main>
+
+        <!-- Patient Detail View (Hidden by default) -->
+        <main id="history-detail" class="hidden">
+            <section class="card">
+                <div class="section-header"
+                    style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <h2 style="margin: 0;"><i class="fa-solid fa-user"></i> <span
+                            id="detail-patient-name">Paciente</span></h2>
+                    <button id="btn-back-from-detail" class="btn btn-secondary" style="padding: 6px 12px;"><i
+                            class="fa-solid fa-arrow-left"></i> Volver</button>
+                </div>
+                <div id="detail-content"></div>
+            </section>
+        </main>
 
         <!-- Live Transcript Toast -->
         <div id="transcript-toast" class="toast"></div>

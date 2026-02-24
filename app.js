@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-auth.js";
-import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
+import { getFirestore, collection, addDoc, serverTimestamp, query, where, orderBy, getDocs } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
 
 const firebaseConfig = {
     apiKey: "AIzaSyBwHs9Or3qhpThQsSEmC2Ccb5s8FPQqEC8",
@@ -1135,5 +1135,209 @@ document.addEventListener('DOMContentLoaded', () => {
             btnSendFeedback.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Enviar';
         }
     });
+
+    // --- 7. PATIENT HISTORY ---
+    const historyContent = document.getElementById('history-content');
+    const historyDetail = document.getElementById('history-detail');
+    const historyList = document.getElementById('history-list');
+    const historySearchInput = document.getElementById('history-search-input');
+    const btnHistory = document.getElementById('btn-history');
+    const btnBackFromHistory = document.getElementById('btn-back-from-history');
+    const btnBackFromDetail = document.getElementById('btn-back-from-detail');
+
+    let cachedPatients = []; // Cache decrypted patients
+
+    // Show history view
+    btnHistory.addEventListener('click', () => {
+        mainContent.classList.add('hidden');
+        micContainer.classList.add('hidden');
+        btnGenerateReport.classList.add('hidden');
+        reportContent.classList.add('hidden');
+        historyDetail.classList.add('hidden');
+        historyContent.classList.remove('hidden');
+        stopListening();
+        fetchPatients();
+    });
+
+    // Back to main from history
+    btnBackFromHistory.addEventListener('click', () => {
+        historyContent.classList.add('hidden');
+        mainContent.classList.remove('hidden');
+        micContainer.classList.remove('hidden');
+        btnGenerateReport.classList.remove('hidden');
+    });
+
+    // Back to history from detail
+    btnBackFromDetail.addEventListener('click', () => {
+        historyDetail.classList.add('hidden');
+        historyContent.classList.remove('hidden');
+    });
+
+    // Search filter
+    historySearchInput.addEventListener('input', () => {
+        const search = historySearchInput.value.toLowerCase();
+        const filtered = cachedPatients.filter(p =>
+            p.name.toLowerCase().includes(search)
+        );
+        renderHistoryList(filtered);
+    });
+
+    // Fetch patients from Firestore
+    async function fetchPatients() {
+        if (!currentUser) {
+            historyList.innerHTML = '<p style="text-align:center; color:var(--text-muted); padding:2rem;">Inicia sesión para ver tu historial.</p>';
+            return;
+        }
+
+        historyList.innerHTML = '<p style="text-align:center; color:var(--text-muted); padding:2rem;"><i class="fa-solid fa-spinner fa-spin"></i> Cargando pacientes...</p>';
+
+        try {
+            const q = query(
+                collection(db, "patients"),
+                where("doctorId", "==", currentUser.uid),
+                orderBy("timestamp", "desc")
+            );
+            const snapshot = await getDocs(q);
+
+            cachedPatients = [];
+
+            for (const doc of snapshot.docs) {
+                const data = doc.data();
+                let name = data.patientName || '';
+                let phone = data.patientPhone || '';
+                let pathologies = data.pathologies || '';
+                let findings = data.findings || '[]';
+
+                // Decrypt if encrypted
+                if (data.encrypted) {
+                    try {
+                        name = await decryptText(name, currentUser.uid);
+                        phone = await decryptText(phone, currentUser.uid);
+                        pathologies = await decryptText(pathologies, currentUser.uid);
+                        findings = await decryptText(findings, currentUser.uid);
+                    } catch (e) {
+                        console.warn('Could not decrypt record:', doc.id, e);
+                        name = '🔒 (No se pudo descifrar)';
+                    }
+                }
+
+                let findingsArr = [];
+                try { findingsArr = JSON.parse(findings); } catch (e) { findingsArr = findings; }
+
+                const timestamp = data.timestamp?.toDate ? data.timestamp.toDate() : new Date();
+
+                cachedPatients.push({
+                    id: doc.id,
+                    name,
+                    age: data.patientAge || '',
+                    sex: data.patientSex || '',
+                    phone,
+                    pathologies,
+                    findings: findingsArr,
+                    date: timestamp
+                });
+            }
+
+            if (cachedPatients.length === 0) {
+                historyList.innerHTML = '<p style="text-align:center; color:var(--text-muted); padding:2rem;"><i class="fa-solid fa-folder-open" style="font-size:2rem; display:block; margin-bottom:0.5rem;"></i> No hay pacientes guardados aún.</p>';
+            } else {
+                renderHistoryList(cachedPatients);
+            }
+        } catch (e) {
+            console.error('Error fetching patients:', e);
+            historyList.innerHTML = `<p style="text-align:center; color:var(--danger); padding:2rem;">Error al cargar pacientes. Verifica que las reglas de Firestore estén configuradas correctamente.</p>`;
+        }
+    }
+
+    // Render the patient list
+    function renderHistoryList(patients) {
+        historyList.innerHTML = patients.map((p, i) => `
+            <div class="history-item" data-index="${i}" style="
+                display: flex; justify-content: space-between; align-items: center;
+                padding: 0.75rem 1rem; border-radius: var(--radius-md);
+                border: 1px solid var(--border); cursor: pointer;
+                transition: background 0.2s; background: var(--surface);
+            ">
+                <div style="flex: 1; min-width: 0;">
+                    <strong style="display: block; font-size: 1rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${p.name}</strong>
+                    <span style="font-size: 0.8rem; color: var(--text-muted);">
+                        ${p.date.toLocaleDateString()} · ${p.age ? p.age + ' años' : ''} ${p.sex ? '· ' + p.sex : ''}
+                    </span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="background: var(--primary); color: white; font-size: 0.7rem; padding: 2px 8px; border-radius: 12px;">
+                        ${Array.isArray(p.findings) ? p.findings.length : 0} hallazgos
+                    </span>
+                    <i class="fa-solid fa-chevron-right" style="color: var(--text-muted); font-size: 0.8rem;"></i>
+                </div>
+            </div>
+        `).join('');
+
+        // Click handlers
+        historyList.querySelectorAll('.history-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const idx = parseInt(item.dataset.index);
+                showPatientDetail(patients[idx]);
+            });
+        });
+    }
+
+    // Show patient detail view
+    function showPatientDetail(patient) {
+        historyContent.classList.add('hidden');
+        historyDetail.classList.remove('hidden');
+
+        document.getElementById('detail-patient-name').textContent = patient.name;
+
+        const detail = document.getElementById('detail-content');
+
+        let findingsHtml = '';
+        if (Array.isArray(patient.findings) && patient.findings.length > 0) {
+            findingsHtml = patient.findings.map(f => `
+                <li style="padding: 0.5rem 0; border-bottom: 1px solid var(--border);">
+                    <strong>${f.condition}</strong> — Unidad ${f.unit}${f.face ? ' · Cara ' + f.face : ''}
+                </li>
+            `).join('');
+        } else {
+            findingsHtml = '<li style="color: var(--text-muted); padding: 0.5rem 0;">Sin hallazgos registrados</li>';
+        }
+
+        detail.innerHTML = `
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1.5rem;">
+                <div>
+                    <label style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Nombre</label>
+                    <p style="font-weight: 600; margin-top: 2px;">${patient.name}</p>
+                </div>
+                <div>
+                    <label style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Edad</label>
+                    <p style="font-weight: 600; margin-top: 2px;">${patient.age || '—'}</p>
+                </div>
+                <div>
+                    <label style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Sexo</label>
+                    <p style="font-weight: 600; margin-top: 2px;">${patient.sex || '—'}</p>
+                </div>
+                <div>
+                    <label style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Teléfono</label>
+                    <p style="font-weight: 600; margin-top: 2px;">${patient.phone || '—'}</p>
+                </div>
+            </div>
+
+            <div style="margin-bottom: 1.5rem;">
+                <label style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Patologías</label>
+                <p style="margin-top: 2px;">${patient.pathologies || 'Ninguna reportada'}</p>
+            </div>
+
+            <div>
+                <label style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; display: block; margin-bottom: 0.5rem;">Hallazgos Clínicos (${Array.isArray(patient.findings) ? patient.findings.length : 0})</label>
+                <ul style="list-style: none; padding: 0; margin: 0;">
+                    ${findingsHtml}
+                </ul>
+            </div>
+
+            <p style="text-align: right; font-size: 0.8rem; color: var(--text-muted); margin-top: 1.5rem;">
+                <i class="fa-solid fa-calendar"></i> Guardado el ${patient.date.toLocaleDateString()} a las ${patient.date.toLocaleTimeString()}
+            </p>
+        `;
+    }
 
 });
