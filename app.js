@@ -1018,13 +1018,49 @@ document.addEventListener('DOMContentLoaded', () => {
         btnDownloadPdf.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Generando...';
         btnDownloadPdf.disabled = true;
 
-        // 1. Generate and save PDF using the proven .save() method
+        // Force light-theme colors for PDF (prevents invisible text in dark mode)
+        element.style.backgroundColor = '#FFFFFF';
+        element.style.color = '#111827';
+        element.querySelectorAll('*').forEach(el => {
+            el.style.color = '#111827';
+        });
+        // Make tooth numbers and SVG visible
+        element.querySelectorAll('.tooth-number').forEach(el => {
+            el.style.color = '#111827';
+        });
+        element.querySelectorAll('.tooth-face').forEach(el => {
+            el.style.stroke = '#111827';
+            el.style.fill = '#FFFFFF';
+        });
+        element.querySelectorAll('h2, h3, h4').forEach(el => {
+            el.style.color = '#111827';
+        });
+        element.querySelectorAll('.report-date, .text-muted').forEach(el => {
+            el.style.color = '#6B7280';
+        });
+
+        // Generate and save PDF
         html2pdf().set(opt).from(element).save().then(async () => {
+
+            // Restore original styles (remove forced inline styles)
+            element.style.backgroundColor = '';
+            element.style.color = '';
+            element.querySelectorAll('*').forEach(el => {
+                el.style.color = '';
+            });
+            element.querySelectorAll('.tooth-face').forEach(el => {
+                el.style.stroke = '';
+                el.style.fill = '';
+            });
+            element.querySelectorAll('h2, h3, h4, .report-date, .text-muted, .tooth-number').forEach(el => {
+                el.style.color = '';
+            });
+
             // Restore button
             btnDownloadPdf.innerHTML = '<i class="fa-solid fa-file-pdf"></i> Guardar PDF';
             btnDownloadPdf.disabled = false;
 
-            // 2. AFTER PDF is saved, encrypt and upload to Firestore in background
+            // Encrypt and upload to Firestore in background
             if (currentUser && inputs.name.value) {
                 try {
                     const uid = currentUser.uid;
