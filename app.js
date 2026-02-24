@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-auth.js";
-import { getFirestore, collection, addDoc, serverTimestamp, query, where, orderBy, getDocs } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
+import { getFirestore, collection, addDoc, serverTimestamp, query, where, orderBy, getDocs, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
 
 const firebaseConfig = {
     apiKey: "AIzaSyBwHs9Or3qhpThQsSEmC2Ccb5s8FPQqEC8",
@@ -18,6 +18,13 @@ const db = getFirestore(app);
 const provider = new GoogleAuthProvider();
 
 let currentUser = null;
+
+// --- EARLY THEME LOAD (Local) ---
+// Apply theme immediately to prevent flash of wrong colors
+const savedTheme = localStorage.getItem('themePreference');
+if (savedTheme === 'dark') {
+    document.documentElement.setAttribute('data-theme', 'dark');
+}
 
 // --- ENCRYPTION HELPERS (AES-GCM via Web Crypto API) ---
 // Derives a unique AES-256 key from the doctor's UID
@@ -81,6 +88,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const listeningStatus = document.getElementById('listening-status');
     const transcriptToast = document.getElementById('transcript-toast');
 
+    // Initialize Theme Icon based on early load
+    if (document.documentElement.getAttribute('data-theme') === 'dark') {
+        themeToggleBtn.innerHTML = '<i class="fa-solid fa-sun"></i>';
+    }
+
     // View Management Elements
     const mainContent = document.getElementById('main-content');
     const reportContent = document.getElementById('report-content');
@@ -112,12 +124,33 @@ document.addEventListener('DOMContentLoaded', () => {
     const userAvatar = document.getElementById('user-avatar');
 
     // Auth State Listener
-    onAuthStateChanged(auth, (user) => {
+    onAuthStateChanged(auth, async (user) => {
         if (user) {
             currentUser = user;
             btnLogin.classList.add('hidden');
             userInfo.classList.remove('hidden');
             userAvatar.src = user.photoURL;
+
+            // --- LOAD THEME FROM FIREBASE ---
+            try {
+                const docRef = doc(db, "users_preferences", user.uid);
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists() && docSnap.data().theme) {
+                    const pref = docSnap.data().theme;
+                    if (pref === 'dark') {
+                        document.documentElement.setAttribute('data-theme', 'dark');
+                        themeToggleBtn.innerHTML = '<i class="fa-solid fa-sun"></i>';
+                        localStorage.setItem('themePreference', 'dark');
+                    } else if (pref === 'light') {
+                        document.documentElement.removeAttribute('data-theme');
+                        themeToggleBtn.innerHTML = '<i class="fa-solid fa-moon"></i>';
+                        localStorage.setItem('themePreference', 'light');
+                    }
+                }
+            } catch (error) {
+                console.error("Error al cargar configuración de tema:", error);
+            }
+
         } else {
             currentUser = null;
             btnLogin.classList.remove('hidden');
@@ -143,14 +176,31 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    themeToggleBtn.addEventListener('click', () => {
+    themeToggleBtn.addEventListener('click', async () => {
         const currentTheme = document.documentElement.getAttribute('data-theme');
+        let newTheme = 'light';
+
         if (currentTheme === 'dark') {
             document.documentElement.removeAttribute('data-theme');
             themeToggleBtn.innerHTML = '<i class="fa-solid fa-moon"></i>';
         } else {
             document.documentElement.setAttribute('data-theme', 'dark');
             themeToggleBtn.innerHTML = '<i class="fa-solid fa-sun"></i>';
+            newTheme = 'dark';
+        }
+
+        // Save locally
+        localStorage.setItem('themePreference', newTheme);
+
+        // Save to Firebase if authenticated
+        if (currentUser) {
+            try {
+                await setDoc(doc(db, "users_preferences", currentUser.uid), {
+                    theme: newTheme
+                }, { merge: true });
+            } catch (error) {
+                console.error("Error al guardar tema en nube:", error);
+            }
         }
     });
 
