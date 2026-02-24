@@ -253,7 +253,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const rec = new SpeechRecognition();
         rec.lang = 'es-ES';
-        rec.continuous = true; // Stay listening continuously
+        rec.continuous = true;
         rec.interimResults = true;
 
         rec.onstart = () => {
@@ -276,6 +276,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (interimTranscript) {
                 showToast(interimTranscript);
+                // Reset listening message while actively speaking
+                listeningStatus.textContent = 'Escuchando...';
             }
 
             if (finalTranscript) {
@@ -284,7 +286,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // Skip if identical to the last processed transcript within 3 seconds
                 if (trimmed === lastProcessedTranscript && (now - lastProcessedTime) < 3000) {
-                    console.log('Duplicate transcript skipped:', trimmed);
                     return;
                 }
 
@@ -297,22 +298,34 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         rec.onerror = (event) => {
-            console.error('Speech recognition error', event.error);
-            // 'no-speech' and 'aborted' are normal on mobile - ignore them silently
-            if (event.error !== 'no-speech' && event.error !== 'aborted') {
+            // Android shuts off mic on silence. Catch it, and force a clean restart.
+            if (event.error === 'no-speech') {
+                if (isListening) {
+                    listeningStatus.textContent = 'Esperando... (puedes pensar)';
+                    // We must stop it so onend fires and we can cleanly restart
+                    try { rec.stop(); } catch (e) { }
+                }
+            } else if (event.error !== 'aborted') {
+                console.error('Speech recognition error:', event.error);
                 showToast('Error: ' + event.error);
+                if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+                    stopListeningIndicator(); // Fatal errors, stop trying
+                }
             }
         };
 
         rec.onend = () => {
-            // Android may kill the session randomly. If we're still supposed
-            // to be listening, silently restart WITHOUT touching the UI.
+            // If the user hasn't explicitly clicked stop, ALWAYS restart
             if (isListening) {
                 setTimeout(() => {
                     if (isListening) {
-                        try { rec.start(); } catch (e) { /* already running */ }
+                        try {
+                            rec.start();
+                        } catch (e) {
+                            // If it's already running somehow, ignore
+                        }
                     }
-                }, 200);
+                }, 250); // Slight delay helps Android clean up the previous session
             } else {
                 stopListeningIndicator();
             }
@@ -331,9 +344,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function stopListening() {
+        // Explicit user stop
+        isListening = false;
         if (recognition) {
-            isListening = false;
-            recognition.stop();
+            try { recognition.stop(); } catch (e) { }
         }
         stopListeningIndicator();
     }
