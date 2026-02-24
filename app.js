@@ -226,7 +226,11 @@ document.addEventListener('DOMContentLoaded', () => {
         rec.onend = () => {
             if (isListening) {
                 // Auto-restart if it stopped but shouldn't have
-                rec.start();
+                try {
+                    rec.start();
+                } catch (e) {
+                    console.warn("Could not auto-restart recognition", e);
+                }
             } else {
                 stopListeningIndicator();
             }
@@ -274,7 +278,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- 4. NATURAL LANGUAGE PARSING LOGIC ---
     function processTranscript(text) {
-        text = text.trim();
+        text = text.trim().toLowerCase();
+
+        // Android Speech-to-Text sometimes adds punctuation like commas or periods
+        // This breaks regex word boundaries. We strip them here.
+        text = text.replace(/[.,!?;:]/g, '');
+
         // Patient Data Extraction
         extractPatientData(text);
 
@@ -795,7 +804,7 @@ document.addEventListener('DOMContentLoaded', () => {
             margin: 10,
             filename: `Odontograma_${inputs.name.value.replace(/\s+/g, '_') || 'Paciente'}.pdf`,
             image: { type: 'jpeg', quality: 0.98 },
-            html2canvas: { scale: 2, useCORS: true },
+            html2canvas: { scale: 2, useCORS: true, windowWidth: 1024 }, // windowWidth forces desktop rendering layout for mobiles
             jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
         };
 
