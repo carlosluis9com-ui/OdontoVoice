@@ -189,7 +189,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const rec = new SpeechRecognition();
         rec.lang = 'es-ES';
-        rec.continuous = false; // Single utterance mode - prevents Android duplication
+        rec.continuous = true; // Stay listening continuously
         rec.interimResults = true;
 
         rec.onstart = () => {
@@ -234,23 +234,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
         rec.onerror = (event) => {
             console.error('Speech recognition error', event.error);
-            // Don't show alert for 'no-speech' or 'aborted' - these are normal on mobile
+            // 'no-speech' and 'aborted' are normal on mobile - ignore them silently
             if (event.error !== 'no-speech' && event.error !== 'aborted') {
                 showToast('Error: ' + event.error);
             }
-            // Don't call stopListening here - let onend handle restart
         };
 
         rec.onend = () => {
+            // Android may kill the session randomly. If we're still supposed
+            // to be listening, silently restart WITHOUT touching the UI.
             if (isListening) {
-                // Auto-restart for the next utterance
-                try {
-                    setTimeout(() => {
-                        if (isListening) rec.start();
-                    }, 100); // Small delay prevents DOMException on Android
-                } catch (e) {
-                    console.warn('Could not auto-restart recognition', e);
-                }
+                setTimeout(() => {
+                    if (isListening) {
+                        try { rec.start(); } catch (e) { /* already running */ }
+                    }
+                }, 200);
             } else {
                 stopListeningIndicator();
             }
