@@ -253,7 +253,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const rec = new SpeechRecognition();
         rec.lang = 'es-ES';
-        rec.continuous = true;
+        rec.continuous = true; // Stay listening continuously
         rec.interimResults = true;
 
         rec.onstart = () => {
@@ -276,64 +276,43 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (interimTranscript) {
                 showToast(interimTranscript);
-                // Reset listening message while actively speaking
-                listeningStatus.textContent = 'Escuchando...';
             }
 
             if (finalTranscript) {
-                const trimmed = finalTranscript.trim();
+                const trimmed = finalTranscript.trim().toLowerCase();
                 const now = Date.now();
 
                 // Skip if identical to the last processed transcript within 3 seconds
-                if (trimmed.toLowerCase() === lastProcessedTranscript.toLowerCase() && (now - lastProcessedTime) < 3000) {
+                if (trimmed === lastProcessedTranscript && (now - lastProcessedTime) < 3000) {
+                    console.log('Duplicate transcript skipped:', trimmed);
                     return;
                 }
 
                 lastProcessedTranscript = trimmed;
                 lastProcessedTime = now;
 
-                // Append to dictation textarea instead of processing immediately
-                const dictationArea = document.getElementById('dictation-textarea');
-                if (dictationArea) {
-                    const currentText = dictationArea.value.trim();
-                    dictationArea.value = currentText ? currentText + '. ' + trimmed : trimmed;
-                    // Auto-scroll to bottom
-                    dictationArea.scrollTop = dictationArea.scrollHeight;
-                }
-
-                showToast('Agregado al texto final');
+                showToast('Procesando: ' + finalTranscript);
+                processTranscript(trimmed);
             }
         };
 
         rec.onerror = (event) => {
-            // Android shuts off mic on silence. Catch it, and force a clean restart.
-            if (event.error === 'no-speech') {
-                if (isListening) {
-                    listeningStatus.textContent = 'Esperando... (puedes pensar)';
-                    // We must stop it so onend fires and we can cleanly restart
-                    try { rec.stop(); } catch (e) { }
-                }
-            } else if (event.error !== 'aborted') {
-                console.error('Speech recognition error:', event.error);
+            console.error('Speech recognition error', event.error);
+            // 'no-speech' and 'aborted' are normal on mobile - ignore them silently
+            if (event.error !== 'no-speech' && event.error !== 'aborted') {
                 showToast('Error: ' + event.error);
-                if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
-                    stopListeningIndicator(); // Fatal errors, stop trying
-                }
             }
         };
 
         rec.onend = () => {
-            // If the user hasn't explicitly clicked stop, ALWAYS restart
+            // Android may kill the session randomly. If we're still supposed
+            // to be listening, silently restart WITHOUT touching the UI.
             if (isListening) {
                 setTimeout(() => {
                     if (isListening) {
-                        try {
-                            rec.start();
-                        } catch (e) {
-                            // If it's already running somehow, ignore
-                        }
+                        try { rec.start(); } catch (e) { /* already running */ }
                     }
-                }, 250); // Slight delay helps Android clean up the previous session
+                }, 200);
             } else {
                 stopListeningIndicator();
             }
@@ -352,64 +331,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function stopListening() {
-        // Explicit user stop
-        isListening = false;
         if (recognition) {
-            try { recognition.stop(); } catch (e) { }
+            isListening = false;
+            recognition.stop();
         }
         stopListeningIndicator();
-    }
-
-    // --- DICTATION NOTEPAD LOGIC ---
-    const dictationArea = document.getElementById('dictation-textarea');
-    const btnClearDictation = document.getElementById('btn-clear-dictation');
-    const btnAnalyzeDictation = document.getElementById('btn-analyze-dictation');
-
-    if (btnClearDictation && dictationArea) {
-        btnClearDictation.addEventListener('click', () => {
-            if (confirm('¿Limpiar todo el texto dictado?')) {
-                dictationArea.value = '';
-            }
-        });
-    }
-
-    if (btnAnalyzeDictation && dictationArea) {
-        btnAnalyzeDictation.addEventListener('click', () => {
-            const text = dictationArea.value.trim();
-            if (!text) {
-                alert('No hay texto para analizar. Empieza a dictar o escribe algo.');
-                return;
-            }
-
-            // Stop listening before processing
-            if (isListening) stopListening();
-
-            const oldBtnHtml = btnAnalyzeDictation.innerHTML;
-            btnAnalyzeDictation.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Analizando...';
-            btnAnalyzeDictation.disabled = true;
-
-            // Process the entire text block. The parser can handle multiple sentences.
-            setTimeout(() => {
-                const sentences = text.toLowerCase().split(/[.¡!¿?]/);
-                let processedCount = 0;
-                sentences.forEach(s => {
-                    const trimmed = s.trim();
-                    if (trimmed.length > 5) { // Avoid processing tiny fragments
-                        processTranscript(trimmed);
-                        processedCount++;
-                    }
-                });
-
-                // Done
-                btnAnalyzeDictation.innerHTML = oldBtnHtml;
-                btnAnalyzeDictation.disabled = false;
-
-                if (processedCount > 0) {
-                    showToast('¡Texto analizado!');
-                    dictationArea.value = ''; // Clear text after successful analyze
-                }
-            }, 100);
-        });
     }
 
     micBtn.addEventListener('click', () => {
