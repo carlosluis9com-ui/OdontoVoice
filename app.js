@@ -1003,91 +1003,187 @@ document.addEventListener('DOMContentLoaded', () => {
         mount.appendChild(clone);
     }
 
-    btnDownloadPdf.addEventListener('click', () => {
-        const element = document.getElementById('pdf-export-area');
+    // --- SHARED PDF GENERATOR (jsPDF text + html2canvas odontogram) ---
+    async function generateOdontogramPDF(patientInfo, findingsArr, odontogramEl) {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+        const pageW = 210, margin = 15, contentW = pageW - margin * 2;
+        let y = 0;
 
-        const opt = {
-            margin: 10,
-            filename: `Odontograma_${inputs.name.value.replace(/\s+/g, '_') || 'Paciente'}.pdf`,
-            image: { type: 'jpeg', quality: 0.98 },
-            html2canvas: { scale: 2, useCORS: true, windowWidth: 1024 },
-            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-        };
+        // --- HEADER ---
+        doc.setFillColor(79, 70, 229);
+        doc.rect(0, 0, pageW, 28, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(18);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Informe Odontológico', margin, 14);
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        const now = new Date();
+        doc.text(`Fecha: ${now.toLocaleDateString()} — ${now.toLocaleTimeString()}`, margin, 22);
+        y = 36;
 
-        // Show loading state
+        // --- PATIENT DATA ---
+        doc.setTextColor(79, 70, 229);
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.text('DATOS DEL PACIENTE', margin, y);
+        y += 2;
+        doc.setDrawColor(79, 70, 229);
+        doc.setLineWidth(0.5);
+        doc.line(margin, y, margin + contentW, y);
+        y += 6;
+
+        doc.setTextColor(30, 30, 30);
+        doc.setFontSize(10);
+
+        const fields = [
+            ['Nombre', patientInfo.name || '—'],
+            ['Edad', patientInfo.age ? patientInfo.age + ' años' : '—'],
+            ['Sexo', patientInfo.sex || '—'],
+            ['Teléfono', patientInfo.phone || '—'],
+            ['Patologías', patientInfo.pathologies || 'Ninguna']
+        ];
+        fields.forEach(([label, value]) => {
+            doc.setFont('helvetica', 'bold');
+            doc.text(label + ':', margin, y);
+            doc.setFont('helvetica', 'normal');
+            const lines = doc.splitTextToSize(value, contentW - 30);
+            doc.text(lines, margin + 30, y);
+            y += lines.length * 5;
+        });
+        y += 4;
+
+        // --- ODONTOGRAM IMAGE ---
+        if (odontogramEl) {
+            doc.setTextColor(79, 70, 229);
+            doc.setFontSize(12);
+            doc.setFont('helvetica', 'bold');
+            doc.text('ODONTODIAGRAMA', margin, y);
+            y += 2;
+            doc.setDrawColor(79, 70, 229);
+            doc.line(margin, y, margin + contentW, y);
+            y += 4;
+
+            try {
+                // Force white background for capture
+                const origBg = odontogramEl.style.backgroundColor;
+                odontogramEl.style.backgroundColor = '#FFFFFF';
+                odontogramEl.querySelectorAll('.tooth-number').forEach(el => el.style.color = '#111827');
+                odontogramEl.querySelectorAll('.tooth-face').forEach(el => {
+                    el.style.stroke = '#333';
+                    el.style.fill = '#FFFFFF';
+                });
+
+                const canvas = await html2canvas(odontogramEl, {
+                    scale: 2, backgroundColor: '#FFFFFF', useCORS: true, windowWidth: 1024
+                });
+
+                // Restore
+                odontogramEl.style.backgroundColor = origBg;
+                odontogramEl.querySelectorAll('.tooth-number').forEach(el => el.style.color = '');
+                odontogramEl.querySelectorAll('.tooth-face').forEach(el => { el.style.stroke = ''; el.style.fill = ''; });
+
+                const imgData = canvas.toDataURL('image/png');
+                const imgW = contentW;
+                const imgH = (canvas.height / canvas.width) * imgW;
+
+                if (y + imgH > 280) { doc.addPage(); y = margin; }
+                doc.addImage(imgData, 'PNG', margin, y, imgW, imgH);
+                y += imgH + 6;
+            } catch (e) {
+                console.warn('Odontogram capture failed:', e);
+                doc.setTextColor(150, 150, 150);
+                doc.setFontSize(9);
+                doc.text('(No se pudo capturar el odontodiagrama)', margin, y);
+                y += 8;
+            }
+        }
+
+        // --- FINDINGS ---
+        if (y > 240) { doc.addPage(); y = margin; }
+
+        doc.setTextColor(79, 70, 229);
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.text('HALLAZGOS CLÍNICOS', margin, y);
+        y += 2;
+        doc.setDrawColor(79, 70, 229);
+        doc.line(margin, y, margin + contentW, y);
+        y += 6;
+
+        doc.setTextColor(30, 30, 30);
+        doc.setFontSize(9);
+
+        if (findingsArr && findingsArr.length > 0) {
+            findingsArr.forEach((f, i) => {
+                if (y > 275) { doc.addPage(); y = margin; }
+                doc.setFont('helvetica', 'bold');
+                doc.text(`${i + 1}.`, margin, y);
+                doc.setFont('helvetica', 'normal');
+                const txt = `${f.condition || '—'} — Unidad ${f.unit || '—'}${f.face ? ' · Cara ' + f.face : ''}`;
+                doc.text(txt, margin + 7, y);
+                y += 5;
+            });
+        } else {
+            doc.setFont('helvetica', 'italic');
+            doc.setTextColor(150, 150, 150);
+            doc.text('Sin hallazgos registrados', margin, y);
+        }
+
+        // --- FOOTER ---
+        doc.setDrawColor(200, 200, 200);
+        doc.setLineWidth(0.3);
+        doc.line(margin, 288, margin + contentW, 288);
+        doc.setFontSize(7);
+        doc.setTextColor(150, 150, 150);
+        doc.setFont('helvetica', 'normal');
+        doc.text('Generado por OdontoVoice · Documento confidencial', margin, 292);
+
+        return doc;
+    }
+
+    // --- MAIN PDF BUTTON (from report view) ---
+    btnDownloadPdf.addEventListener('click', async () => {
         btnDownloadPdf.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Generando...';
         btnDownloadPdf.disabled = true;
 
-        // Force light-theme colors for PDF (prevents invisible text in dark mode)
-        element.style.backgroundColor = '#FFFFFF';
-        element.style.color = '#111827';
-        element.querySelectorAll('*').forEach(el => {
-            el.style.color = '#111827';
-        });
-        // Make tooth numbers and SVG visible
-        element.querySelectorAll('.tooth-number').forEach(el => {
-            el.style.color = '#111827';
-        });
-        element.querySelectorAll('.tooth-face').forEach(el => {
-            el.style.stroke = '#111827';
-            el.style.fill = '#FFFFFF';
-        });
-        element.querySelectorAll('h2, h3, h4').forEach(el => {
-            el.style.color = '#111827';
-        });
-        element.querySelectorAll('.report-date, .text-muted').forEach(el => {
-            el.style.color = '#6B7280';
-        });
+        try {
+            const pInfo = {
+                name: inputs.name.value,
+                age: inputs.age.value,
+                sex: inputs.sex.value,
+                phone: inputs.phone.value,
+                pathologies: inputs.pathologies.value
+            };
+            const odontogramEl = document.getElementById('odontogram-container');
+            const doc = await generateOdontogramPDF(pInfo, clinicalFindings, odontogramEl);
+            doc.save(`Odontograma_${pInfo.name.replace(/\s+/g, '_') || 'Paciente'}.pdf`);
 
-        // Generate and save PDF
-        html2pdf().set(opt).from(element).save().then(async () => {
-
-            // Restore original styles (remove forced inline styles)
-            element.style.backgroundColor = '';
-            element.style.color = '';
-            element.querySelectorAll('*').forEach(el => {
-                el.style.color = '';
-            });
-            element.querySelectorAll('.tooth-face').forEach(el => {
-                el.style.stroke = '';
-                el.style.fill = '';
-            });
-            element.querySelectorAll('h2, h3, h4, .report-date, .text-muted, .tooth-number').forEach(el => {
-                el.style.color = '';
-            });
-
-            // Restore button
-            btnDownloadPdf.innerHTML = '<i class="fa-solid fa-file-pdf"></i> Guardar PDF';
-            btnDownloadPdf.disabled = false;
-
-            // Encrypt and upload to Firestore in background
+            // Encrypt and save to Firestore in background
             if (currentUser && inputs.name.value) {
                 try {
                     const uid = currentUser.uid;
-
                     const encName = await encryptText(inputs.name.value, uid);
                     const encPhone = await encryptText(inputs.phone.value || '', uid);
                     const encPathologies = await encryptText(inputs.pathologies.value || '', uid);
                     const encFindings = await encryptText(JSON.stringify(clinicalFindings), uid);
-
                     await addDoc(collection(db, "patients"), {
-                        doctorId: uid,
-                        doctorEmail: currentUser.email,
-                        patientName: encName,
-                        patientAge: inputs.age.value,
-                        patientSex: inputs.sex.value,
-                        patientPhone: encPhone,
-                        pathologies: encPathologies,
-                        findings: encFindings,
-                        encrypted: true,
-                        timestamp: serverTimestamp()
+                        doctorId: uid, doctorEmail: currentUser.email,
+                        patientName: encName, patientAge: inputs.age.value, patientSex: inputs.sex.value,
+                        patientPhone: encPhone, pathologies: encPathologies,
+                        findings: encFindings, encrypted: true, timestamp: serverTimestamp()
                     });
                     console.log("Paciente guardado en la nube (encriptado)");
-                } catch (e) {
-                    console.error("Error al guardar en la nube:", e);
-                }
+                } catch (e) { console.error("Error al guardar en la nube:", e); }
             }
-        });
+        } catch (e) {
+            console.error('Error generando PDF:', e);
+            alert('Error al generar el PDF.');
+        }
+
+        btnDownloadPdf.innerHTML = '<i class="fa-solid fa-file-pdf"></i> Guardar PDF';
+        btnDownloadPdf.disabled = false;
     });
 
     // --- 6. FEEDBACK MODAL ---
@@ -1283,7 +1379,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Show patient detail view
+    let currentDetailPatient = null;
+
     function showPatientDetail(patient) {
+        currentDetailPatient = patient;
         historyContent.classList.add('hidden');
         historyDetail.classList.remove('hidden');
 
@@ -1339,5 +1438,33 @@ document.addEventListener('DOMContentLoaded', () => {
             </p>
         `;
     }
+
+    // PDF from history detail
+    const btnDetailPdf = document.getElementById('btn-detail-pdf');
+    btnDetailPdf.addEventListener('click', async () => {
+        if (!currentDetailPatient) return;
+
+        btnDetailPdf.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> ...';
+        btnDetailPdf.disabled = true;
+
+        try {
+            const pInfo = {
+                name: currentDetailPatient.name,
+                age: currentDetailPatient.age,
+                sex: currentDetailPatient.sex,
+                phone: currentDetailPatient.phone,
+                pathologies: currentDetailPatient.pathologies
+            };
+            // No live odontogram for history records — pass null
+            const doc = await generateOdontogramPDF(pInfo, currentDetailPatient.findings, null);
+            doc.save(`Odontograma_${pInfo.name.replace(/\s+/g, '_') || 'Paciente'}.pdf`);
+        } catch (e) {
+            console.error('Error generando PDF desde historial:', e);
+            alert('Error al generar el PDF.');
+        }
+
+        btnDetailPdf.innerHTML = '<i class="fa-solid fa-file-pdf"></i> PDF';
+        btnDetailPdf.disabled = false;
+    });
 
 });

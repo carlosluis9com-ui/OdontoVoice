@@ -9,8 +9,10 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <!-- Font Awesome for Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- html2pdf for PDF generation -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <!-- jsPDF for PDF generation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <!-- html2canvas for odontogram image capture -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
     <link rel="stylesheet" href="styles.css">
 </head>
@@ -244,8 +246,12 @@
                     style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
                     <h2 style="margin: 0;"><i class="fa-solid fa-user"></i> <span
                             id="detail-patient-name">Paciente</span></h2>
-                    <button id="btn-back-from-detail" class="btn btn-secondary" style="padding: 6px 12px;"><i
-                            class="fa-solid fa-arrow-left"></i> Volver</button>
+                    <div style="display: flex; gap: 8px;">
+                        <button id="btn-detail-pdf" class="btn btn-primary" style="padding: 6px 12px;"><i
+                                class="fa-solid fa-file-pdf"></i> PDF</button>
+                        <button id="btn-back-from-detail" class="btn btn-secondary" style="padding: 6px 12px;"><i
+                                class="fa-solid fa-arrow-left"></i> Volver</button>
+                    </div>
                 </div>
                 <div id="detail-content"></div>
             </section>
